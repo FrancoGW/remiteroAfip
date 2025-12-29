@@ -33,17 +33,31 @@ curl -X POST http://localhost:8000/generate \
   -d @remito.json
 ```
 
-## Despliegue
+## Despliegue en Railway
 
-Este servicio puede desplegarse en:
-- Vercel (usando serverless functions de Python)
-- AWS Lambda
-- Google Cloud Functions
-- Railway
-- Render
-- Cualquier plataforma que soporte Python
+### Pasos importantes:
+
+1. **En Railway, asegúrate de configurar el "Root Directory"**:
+   - Ve a Settings → Source
+   - Configura "Root Directory" como `pdf-service`
+   - Esto es CRÍTICO para que Railway solo vea los archivos Python
+
+2. Railway detectará automáticamente que es Python por el archivo `requirements.txt`
+
+3. Railway usará el comando de inicio: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+4. Una vez desplegado, obtendrás una URL como: `https://tu-proyecto.railway.app`
+
+5. Configura esta URL en Vercel como variable de entorno:
+   ```
+   PDF_SERVICE_URL=https://tu-proyecto.railway.app
+   ```
 
 ## Variables de entorno
 
-El servicio usa las mismas variables de entorno que el proyecto principal para la configuración de la empresa.
+El servicio usa las mismas variables de entorno que el proyecto principal para la configuración de la empresa (opcional, tiene valores por defecto).
+
+## Nota sobre Railway
+
+Si Railway detecta vulnerabilidades del proyecto principal (Next.js), es porque está leyendo el `package.json` del directorio raíz. Asegúrate de configurar el "Root Directory" como `pdf-service` en la configuración de Railway.
 
