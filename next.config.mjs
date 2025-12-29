@@ -5,6 +5,15 @@ const nextConfig = {
     if (isServer) {
       // Configurar para que PDFKit pueda acceder a sus archivos
       config.externals = [...(config.externals || []), 'canvas', 'bufferutil', 'utf-8-validate'];
+      
+      // Excluir archivos .afm de PDFKit del bundling
+      config.module.rules.push({
+        test: /\.afm$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/chunks/[name][ext]',
+        },
+      });
     }
     return config;
   },

@@ -5,25 +5,74 @@ import { EMPRESA_CONFIG } from "../config/empresa";
 import path from "path";
 import fs from "fs";
 
-// Configurar la ruta base para los archivos de fuentes de PDFKit
-const PDFKIT_FONT_PATH = path.join(process.cwd(), "node_modules", "pdfkit", "js", "data");
-const TARGET_FONT_PATH = path.join(process.cwd(), ".next", "server", "vendor-chunks", "data");
+/**
+ * Encuentra la ruta de las fuentes de PDFKit en cualquier entorno
+ */
+function encontrarRutaFuentesPDFKit(): string | null {
+  const posiblesRutas: string[] = [];
 
-// Asegurar que los archivos de fuentes estén disponibles
-if (fs.existsSync(PDFKIT_FONT_PATH) && !fs.existsSync(TARGET_FONT_PATH)) {
+  // 1. Intentar con require.resolve desde el módulo principal (funciona en Vercel)
   try {
-    fs.mkdirSync(TARGET_FONT_PATH, { recursive: true });
-    const fontFiles = fs.readdirSync(PDFKIT_FONT_PATH).filter((f: string) => f.endsWith('.afm'));
-    fontFiles.forEach((file: string) => {
-      const source = path.join(PDFKIT_FONT_PATH, file);
-      const target = path.join(TARGET_FONT_PATH, file);
-      if (!fs.existsSync(target)) {
-        fs.copyFileSync(source, target);
-      }
-    });
+    const pdfkitPath = require.resolve("pdfkit");
+    const pdfkitDir = path.dirname(pdfkitPath);
+    posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
+    posiblesRutas.push(path.join(pdfkitDir, "..", "js", "data"));
+    posiblesRutas.push(path.join(pdfkitDir, "..", "..", "js", "data"));
   } catch (error) {
-    console.warn("No se pudieron copiar los archivos de fuentes de PDFKit:", error);
+    // Continuar con otras opciones
   }
+
+  // 2. Intentar resolver desde package.json de pdfkit
+  try {
+    const pdfkitModulePath = require.resolve("pdfkit/package.json");
+    const pdfkitDir = path.dirname(pdfkitModulePath);
+    posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
+  } catch (error) {
+    // Continuar
+  }
+
+  // 3. Ruta estándar desde process.cwd()
+  posiblesRutas.push(path.join(process.cwd(), "node_modules", "pdfkit", "js", "data"));
+
+  // 4. Buscar en /var/task (Vercel - ruta de ejecución)
+  posiblesRutas.push("/var/task/node_modules/pdfkit/js/data");
+  
+  // 5. Buscar en /var/task/.next (Vercel - build output)
+  posiblesRutas.push("/var/task/.next/server/node_modules/pdfkit/js/data");
+  posiblesRutas.push("/var/task/.next/server/chunks/node_modules/pdfkit/js/data");
+
+  // 6. Ruta usando __dirname (si está disponible)
+  try {
+    posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "js", "data"));
+  } catch (error) {
+    // __dirname puede no estar disponible en ESM
+  }
+
+  // Buscar la primera ruta que exista y tenga archivos .afm
+  for (const ruta of posiblesRutas) {
+    try {
+      if (fs.existsSync(ruta)) {
+        const archivos = fs.readdirSync(ruta);
+        if (archivos.some((f) => f.endsWith(".afm"))) {
+          console.log(`✅ Fuentes de PDFKit encontradas en: ${ruta}`);
+          return ruta;
+        }
+      }
+    } catch (error) {
+      // Continuar con la siguiente ruta
+    }
+  }
+
+  console.warn("⚠️ No se encontraron las fuentes de PDFKit. PDFKit usará fuentes por defecto.");
+  return null;
+}
+
+// Configurar la ruta de fuentes
+const PDFKIT_FONT_PATH = encontrarRutaFuentesPDFKit();
+
+// Configurar la variable de entorno para PDFKit si encontramos la ruta
+if (PDFKIT_FONT_PATH && !process.env.PDFKIT_FONT_PATH) {
+  process.env.PDFKIT_FONT_PATH = PDFKIT_FONT_PATH;
 }
 
 /**
@@ -36,8 +85,12 @@ export class PDFGenerator {
   static generarRemitoPDF(remito: Remito): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
+        // Asegurar que la variable de entorno esté configurada
         if (!process.env.PDFKIT_FONT_PATH) {
-          process.env.PDFKIT_FONT_PATH = PDFKIT_FONT_PATH;
+          const rutaEncontrada = encontrarRutaFuentesPDFKit();
+          if (rutaEncontrada) {
+            process.env.PDFKIT_FONT_PATH = rutaEncontrada;
+          }
         }
 
         const doc = new PDFDocument({
