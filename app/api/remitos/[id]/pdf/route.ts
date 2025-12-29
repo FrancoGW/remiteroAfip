@@ -29,8 +29,11 @@ export async function GET(
     // Generar PDF
     const pdfBuffer = await PDFGenerator.generarRemitoPDF(remito);
 
+    // Convertir Buffer a Uint8Array para NextResponse
+    const pdfArray = new Uint8Array(pdfBuffer);
+
     // Retornar PDF como respuesta
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfArray, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
