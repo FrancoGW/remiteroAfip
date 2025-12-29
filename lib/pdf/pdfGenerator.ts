@@ -246,34 +246,34 @@ export class PDFGenerator {
           }
           return originalReadFileSync.call(fs, filePath, ...args);
         };
-            
-            // Patch fs.readFile (asíncrono) - usar apply para manejar argumentos dinámicamente
-            (fs as any).readFile = function(...args: any[]): any {
-              const filePath = args[0];
-              if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
-                const rutaReal = fontPathMap!.get(filePath)!;
-                console.log(`🔄 Redirigiendo readFile: ${filePath} -> ${rutaReal}`);
-                args[0] = rutaReal;
-                return (originalReadFile as any).apply(fs, args);
-              }
+        
+        // Patch fs.readFile (asíncrono) - usar apply para manejar argumentos dinámicamente
+        (fs as any).readFile = function(...args: any[]): any {
+          const filePath = args[0];
+          if (typeof filePath === 'string' && filePath.endsWith('.afm')) {
+            if (fontPathMap && fontPathMap.has(filePath)) {
+              const rutaReal = fontPathMap.get(filePath)!;
+              console.log(`🔄 Redirigiendo readFile: ${filePath} -> ${rutaReal}`);
+              args[0] = rutaReal;
               return (originalReadFile as any).apply(fs, args);
-            };
-            
-            // Patch fs.openSync (usado por algunos métodos de lectura)
-            (fs as any).openSync = function(...args: any[]): any {
-              const filePath = args[0];
-              if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
-                const rutaReal = fontPathMap!.get(filePath)!;
-                console.log(`🔄 Redirigiendo openSync: ${filePath} -> ${rutaReal}`);
-                args[0] = rutaReal;
-                return (originalOpenSync as any).apply(fs, args);
-              }
-              return (originalOpenSync as any).apply(fs, args);
-            };
-          } catch (error) {
-            console.warn("⚠️ Error configurando patch de fuentes:", error);
+            }
           }
-        }
+          return (originalReadFile as any).apply(fs, args);
+        };
+        
+        // Patch fs.openSync (usado por algunos métodos de lectura)
+        (fs as any).openSync = function(...args: any[]): any {
+          const filePath = args[0];
+          if (typeof filePath === 'string' && filePath.endsWith('.afm')) {
+            if (fontPathMap && fontPathMap.has(filePath)) {
+              const rutaReal = fontPathMap.get(filePath)!;
+              console.log(`🔄 Redirigiendo openSync: ${filePath} -> ${rutaReal}`);
+              args[0] = rutaReal;
+              return (originalOpenSync as any).apply(fs, args);
+            }
+          }
+          return (originalOpenSync as any).apply(fs, args);
+        };
         
         const buffers: Buffer[] = [];
         doc.on("data", buffers.push.bind(buffers));
