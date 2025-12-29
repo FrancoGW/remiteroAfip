@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// En producción, esto vendría de una base de datos
-let remitosStorage: any[] = [];
+import { remitosStorageService } from "@/lib/storage/remitosStorage";
 
 /**
  * GET /api/remitos/[id]
@@ -9,10 +7,11 @@ let remitosStorage: any[] = [];
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const remito = remitosStorage.find((r) => r.id === params.id);
+    const { id } = await params;
+    const remito = remitosStorageService.getById(id);
 
     if (!remito) {
       return NextResponse.json(

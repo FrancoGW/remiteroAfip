@@ -16,11 +16,20 @@ export interface Remito {
   nombreReceptor: string;
   domicilioReceptor: string;
   
+  // Campos adicionales del receptor
+  predio?: string;
+  rodal?: string;
+  domicilioFiscal?: string;
+  condicionIva?: string; // "RESPONSABLE INSCRIPTO" | "RESPONSABLE NO INSCRIPTO"
+  
   // Transporte
   tipoTransporte: number; // 1: Propio, 2: Tercero
   cuitTransportista?: string;
   nombreTransportista?: string;
   dominioVehiculo?: string;
+  dominioAcoplado?: string;
+  conductor?: string;
+  dniConductor?: string;
   
   // Origen y destino
   origenDomicilio: string;
@@ -52,6 +61,13 @@ export interface RemitoItem {
   unidadMedida: string; // KG, UN, LT, etc.
   pesoNeto?: number;
   pesoBruto?: number;
+  // Campos adicionales para remito forestal
+  especie?: string;
+  largo?: number;
+  categoria?: string;
+  m3Stereo?: number;
+  tara?: number;
+  balanza?: string;
 }
 
 export interface AfipResponse {

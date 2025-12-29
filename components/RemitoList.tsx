@@ -51,6 +51,27 @@ export default function RemitoList() {
     }
   };
 
+  const descargarPDF = async (remitoId: string, numeroRemito?: number) => {
+    try {
+      const response = await fetch(`/api/remitos/${remitoId}/pdf`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `remito-${numeroRemito || remitoId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        console.error("Error al descargar el PDF");
+      }
+    } catch (error) {
+      console.error("Error al descargar PDF:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -121,6 +142,7 @@ export default function RemitoList() {
                   <Eye size={20} />
                 </button>
                 <button
+                  onClick={() => remito.id && descargarPDF(remito.id, remito.numeroRemito)}
                   className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                   title="Descargar PDF"
                 >
@@ -327,7 +349,10 @@ export default function RemitoList() {
               >
                 Cerrar
               </button>
-              <button className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2">
+              <button
+                onClick={() => selectedRemito.id && descargarPDF(selectedRemito.id, selectedRemito.numeroRemito)}
+                className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
                 <Download size={16} />
                 Descargar PDF
               </button>
