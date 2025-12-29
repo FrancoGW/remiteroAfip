@@ -103,48 +103,119 @@ export class PDFGenerator {
           },
         });
 
-        const buffers: Buffer[] = [];
+        // Configurar patch de fs para interceptar todas las lecturas de fuentes
         const originalReadFileSync = fs.readFileSync;
+        const originalReadFile = fs.readFile;
+        const originalOpenSync = fs.openSync;
         let fontPathMap: Map<string, string> | null = null;
         
-        // Configurar el patch de fs.readFileSync si encontramos fuentes
         if (rutaEncontrada) {
           fontPathMap = new Map<string, string>();
           try {
             const archivos = fs.readdirSync(rutaEncontrada);
-            archivos.filter((f) => f.endsWith(".afm")).forEach((archivo) => {
+            const archivosAFM = archivos.filter((f) => f.endsWith(".afm"));
+            
+            // Intentar copiar a /tmp (escribible en Vercel) como fallback
+            const tmpFontDir = "/tmp/pdfkit-fonts";
+            try {
+              if (!fs.existsSync(tmpFontDir)) {
+                fs.mkdirSync(tmpFontDir, { recursive: true });
+              }
+              
+              archivosAFM.forEach((archivo) => {
+                const origen = path.join(rutaEncontrada!, archivo);
+                const destino = path.join(tmpFontDir, archivo);
+                try {
+                  fs.copyFileSync(origen, destino);
+                  console.log(`📋 Copiado ${archivo} a ${tmpFontDir}`);
+                } catch (error) {
+                  console.warn(`⚠️ No se pudo copiar ${archivo} a /tmp:`, error);
+                }
+              });
+            } catch (error) {
+              console.warn("⚠️ No se pudo crear directorio /tmp/pdfkit-fonts:", error);
+            }
+            
+            // Mapear todas las posibles rutas que PDFKit podría buscar
+            archivosAFM.forEach((archivo) => {
               const rutaCompleta = path.join(rutaEncontrada!, archivo);
-              // Mapear posibles rutas que PDFKit podría buscar
-              fontPathMap!.set(`/var/task/.next/server/chunks/data/${archivo}`, rutaCompleta);
-              fontPathMap!.set(path.join(process.cwd(), ".next", "server", "chunks", "data", archivo), rutaCompleta);
-              fontPathMap!.set(path.join(process.cwd(), ".next", "server", "vendor-chunks", "data", archivo), rutaCompleta);
+              const rutaTmp = path.join(tmpFontDir, archivo);
+              
+              const rutasBuscadas = [
+                `/var/task/.next/server/chunks/data/${archivo}`,
+                `/var/task/.next/server/vendor-chunks/data/${archivo}`,
+                path.join(process.cwd(), ".next", "server", "chunks", "data", archivo),
+                path.join(process.cwd(), ".next", "server", "vendor-chunks", "data", archivo),
+                path.join(process.cwd(), ".next", "server", "chunks", "node_modules", "pdfkit", "js", "data", archivo),
+              ];
+              
+              // Mapear a la ruta original y también a /tmp como fallback
+              rutasBuscadas.forEach(ruta => {
+                fontPathMap!.set(ruta, rutaCompleta);
+                // También mapear a /tmp si existe
+                if (fs.existsSync(rutaTmp)) {
+                  fontPathMap!.set(ruta, rutaTmp);
+                }
+              });
             });
             
-            // Patch fs.readFileSync
-            (fs as any).readFileSync = function(filePath: string, ...args: any[]) {
+            console.log(`📋 Configurando patch para ${fontPathMap.size} rutas de fuentes`);
+            
+            // Patch fs.readFileSync (síncrono)
+            (fs as any).readFileSync = function(filePath: string | Buffer, ...args: any[]) {
               if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
                 const rutaReal = fontPathMap!.get(filePath)!;
+                console.log(`🔄 Redirigiendo readFileSync: ${filePath} -> ${rutaReal}`);
                 return originalReadFileSync.call(fs, rutaReal, ...args);
               }
               return originalReadFileSync.call(fs, filePath, ...args);
+            };
+            
+            // Patch fs.readFile (asíncrono) - usar apply para manejar argumentos dinámicamente
+            (fs as any).readFile = function(...args: any[]): any {
+              const filePath = args[0];
+              if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
+                const rutaReal = fontPathMap!.get(filePath)!;
+                console.log(`🔄 Redirigiendo readFile: ${filePath} -> ${rutaReal}`);
+                args[0] = rutaReal;
+                return (originalReadFile as any).apply(fs, args);
+              }
+              return (originalReadFile as any).apply(fs, args);
+            };
+            
+            // Patch fs.openSync (usado por algunos métodos de lectura)
+            (fs as any).openSync = function(...args: any[]): any {
+              const filePath = args[0];
+              if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
+                const rutaReal = fontPathMap!.get(filePath)!;
+                console.log(`🔄 Redirigiendo openSync: ${filePath} -> ${rutaReal}`);
+                args[0] = rutaReal;
+                return (originalOpenSync as any).apply(fs, args);
+              }
+              return (originalOpenSync as any).apply(fs, args);
             };
           } catch (error) {
             console.warn("⚠️ Error configurando patch de fuentes:", error);
           }
         }
         
+        const buffers: Buffer[] = [];
         doc.on("data", buffers.push.bind(buffers));
         doc.on("end", () => {
-          // Restaurar fs.readFileSync antes de resolver
+          // Restaurar funciones originales
           if (fontPathMap) {
             (fs as any).readFileSync = originalReadFileSync;
+            (fs as any).readFile = originalReadFile;
+            (fs as any).openSync = originalOpenSync;
           }
           resolve(Buffer.concat(buffers));
         });
         doc.on("error", (error) => {
-          // Restaurar fs.readFileSync antes de rechazar
+          // Restaurar funciones originales
           if (fontPathMap) {
             (fs as any).readFileSync = originalReadFileSync;
+            (fs as any).readFile = originalReadFile;
+            (fs as any).openSync = originalOpenSync;
           }
           reject(error);
         });
