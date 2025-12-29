@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFGenerator } from "@/lib/pdf/pdfGenerator";
+import { PDFService } from "@/lib/pdf/pdfService";
 import { remitosStorageService } from "@/lib/storage/remitosStorage";
 
 /**
  * GET /api/remitos/[id]/pdf
- * Genera y descarga el PDF de un remito específico
+ * Genera y descarga el PDF de un remito específico usando el nuevo servicio PDF
  */
 export async function GET(
   request: NextRequest,
@@ -26,8 +26,8 @@ export async function GET(
       );
     }
 
-    // Generar PDF
-    const pdfBuffer = await PDFGenerator.generarRemitoPDF(remito);
+    // Generar PDF usando el nuevo servicio (pdfmake)
+    const pdfBuffer = await PDFService.generarRemitoPDF(remito);
 
     // Convertir Buffer a Uint8Array para NextResponse
     const pdfArray = new Uint8Array(pdfBuffer);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFGenerator } from "@/lib/pdf/pdfGenerator";
+import { PDFService } from "@/lib/pdf/pdfService";
 import { Remito } from "@/lib/types/remito";
 import { remitosStorageService } from "@/lib/storage/remitosStorage";
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/remitos
- * Genera un nuevo remito digital y su PDF usando PDFKit
+ * Genera un nuevo remito digital y su PDF usando pdfmake
  * 
  * @body JSON con los datos del remito (ver API_DOCUMENTATION.md para estructura completa)
  * 
@@ -161,8 +161,8 @@ export async function POST(request: NextRequest) {
       fechaCreacion: fechaCreacion,
     };
 
-    // Generar PDF del remito
-    const pdfBuffer = await PDFGenerator.generarRemitoPDF(nuevoRemito);
+    // Generar PDF del remito usando el nuevo servicio (pdfmake)
+    const pdfBuffer = await PDFService.generarRemitoPDF(nuevoRemito);
     const pdfBase64 = pdfBuffer.toString("base64");
 
     // Guardar en el almacenamiento
