@@ -30,9 +30,12 @@ function inicializarFuentesPDFKit(): string | null {
   // Lista exhaustiva de rutas posibles donde pueden estar las fuentes
   const posiblesRutas: string[] = [];
   
-  // Estrategia 1: Buscar en .next/server/pdfkit-fonts (donde webpack las copia durante el build)
+  // Estrategia 1: Buscar en .next/server/pdfkit-fonts (donde el script postbuild las copia)
+  // En Vercel, process.cwd() es /var/task
   posiblesRutas.push(path.join(process.cwd(), ".next", "server", "pdfkit-fonts"));
   posiblesRutas.push("/var/task/.next/server/pdfkit-fonts");
+  // También buscar en la raíz del proyecto en caso de que .next esté en otro lugar
+  posiblesRutas.push(path.join(process.cwd(), "..", ".next", "server", "pdfkit-fonts"));
   
   // Estrategia 2: Intentar usar require.resolve del módulo pdfkit (NO de archivos .afm directamente)
   try {
@@ -106,12 +109,15 @@ function inicializarFuentesPDFKit(): string | null {
       if (fs.existsSync(ruta)) {
         const archivos = fs.readdirSync(ruta);
         const tieneAFM = archivos.some((f) => f.endsWith(".afm"));
-        console.log(`  📂 ${ruta}: ${archivos.length} archivos, tiene .afm: ${tieneAFM}`);
+        const archivosAFM = archivos.filter((f) => f.endsWith(".afm"));
+        console.log(`  📂 ${ruta}: ${archivos.length} archivos, tiene .afm: ${tieneAFM} (${archivosAFM.length} archivos .afm)`);
         if (tieneAFM) {
           fuenteRuta = ruta;
           console.log(`✅ Fuentes encontradas en: ${fuenteRuta}`);
           break;
         }
+      } else {
+        console.log(`  ❌ No existe: ${ruta}`);
       }
     } catch (error: any) {
       // Continuar con la siguiente ruta
@@ -223,18 +229,14 @@ function inicializarFuentesPDFKit(): string | null {
 
 /**
  * Encuentra la ruta de las fuentes de PDFKit (compatibilidad hacia atrás)
+ * NOTA: NO inicializar aquí porque las fuentes se copian después del build
  */
 function encontrarRutaFuentesPDFKit(): string | null {
   return inicializarFuentesPDFKit();
 }
 
-// Configurar la ruta de fuentes
-const PDFKIT_FONT_PATH = encontrarRutaFuentesPDFKit();
-
-// Configurar la variable de entorno para PDFKit si encontramos la ruta
-if (PDFKIT_FONT_PATH && !process.env.PDFKIT_FONT_PATH) {
-  process.env.PDFKIT_FONT_PATH = PDFKIT_FONT_PATH;
-}
+// NO inicializar las fuentes al cargar el módulo
+// Se inicializarán la primera vez que se genere un PDF (runtime)
 
 /**
  * Servicio para generar PDFs de remitos usando PDFKit
