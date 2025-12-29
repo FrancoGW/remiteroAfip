@@ -14,13 +14,17 @@ function encontrarRutaFuentesPDFKit(): string | null {
   // 1. Intentar con require.resolve desde el módulo principal (funciona en Vercel)
   try {
     const pdfkitPath = require.resolve("pdfkit");
-    const pdfkitDir = path.dirname(pdfkitPath);
-    posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
-    posiblesRutas.push(path.join(pdfkitDir, "..", "js", "data"));
-    posiblesRutas.push(path.join(pdfkitDir, "..", "..", "js", "data"));
-    posiblesRutas.push(path.join(pdfkitDir, "..", "..", "..", "js", "data"));
+    // Verificar que sea un string (en Vercel a veces devuelve números)
+    if (typeof pdfkitPath === 'string') {
+      const pdfkitDir = path.dirname(pdfkitPath);
+      posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
+      posiblesRutas.push(path.join(pdfkitDir, "..", "js", "data"));
+      posiblesRutas.push(path.join(pdfkitDir, "..", "..", "js", "data"));
+      posiblesRutas.push(path.join(pdfkitDir, "..", "..", "..", "js", "data"));
+    }
   } catch (error) {
-    console.warn("⚠️ No se pudo resolver pdfkit con require.resolve:", error);
+    // En Vercel, require.resolve puede fallar o devolver valores inesperados
+    // Continuar con otras opciones
   }
 
   // 2. Intentar resolver desde package.json de pdfkit
@@ -208,28 +212,48 @@ export class PDFGenerator {
         }
         
         // Patch fs.readFileSync (síncrono) - SIEMPRE ejecutar, incluso sin mapa
+        // Este patch DEBE ejecutarse ANTES de que PDFKit intente leer las fuentes
         (fs as any).readFileSync = function(filePath: string | Buffer, ...args: any[]) {
           if (typeof filePath === 'string' && filePath.endsWith('.afm')) {
+            console.log(`🔍 PDFKit intenta leer: ${filePath}`);
+            
             // Primero verificar el mapa si existe
             if (fontPathMap && fontPathMap.has(filePath)) {
               const rutaReal = fontPathMap.get(filePath)!;
               console.log(`🔄 Redirigiendo readFileSync (mapa): ${filePath} -> ${rutaReal}`);
               return originalReadFileSync.call(fs, rutaReal, ...args);
             }
+            
             // Si no está en el mapa pero es una ruta de Vercel, buscar dinámicamente
             if (filePath.includes('/var/task/.next/server/chunks/data/') || 
-                filePath.includes('/var/task/.next/server/vendor-chunks/data/')) {
+                filePath.includes('/var/task/.next/server/vendor-chunks/data/') ||
+                filePath.includes('/.next/server/chunks/data/')) {
               const archivo = path.basename(filePath);
               console.log(`🔍 Buscando dinámicamente: ${archivo}`);
               
               // Intentar encontrar en múltiples ubicaciones
-              const posiblesUbicaciones = [
-                rutaFinal ? path.join(rutaFinal, archivo) : null,
+              const posiblesUbicaciones: string[] = [];
+              
+              if (rutaFinal) {
+                posiblesUbicaciones.push(path.join(rutaFinal, archivo));
+              }
+              
+              posiblesUbicaciones.push(
                 path.join(tmpFontDir, archivo),
                 `/var/task/node_modules/pdfkit/js/data/${archivo}`,
                 `/var/task/node_modules/pdfkit/lib/js/data/${archivo}`,
                 path.join(process.cwd(), "node_modules", "pdfkit", "js", "data", archivo),
-              ].filter((u): u is string => u !== null);
+              );
+              
+              // También buscar usando require.resolve si es posible
+              try {
+                const resolvedPath = require.resolve(`pdfkit/js/data/${archivo}`);
+                if (typeof resolvedPath === 'string') {
+                  posiblesUbicaciones.push(resolvedPath);
+                }
+              } catch (error) {
+                // Continuar
+              }
               
               for (const ubicacion of posiblesUbicaciones) {
                 try {
@@ -241,7 +265,7 @@ export class PDFGenerator {
                   // Continuar
                 }
               }
-              console.error(`❌ No se encontró ${archivo} en ninguna ubicación`);
+              console.error(`❌ No se encontró ${archivo} en ninguna ubicación. Intentadas: ${posiblesUbicaciones.join(', ')}`);
             }
           }
           return originalReadFileSync.call(fs, filePath, ...args);
