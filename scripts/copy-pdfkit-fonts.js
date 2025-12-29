@@ -16,6 +16,13 @@ if (!fs.existsSync(sourceDir)) {
   process.exit(1);
 }
 
+// Asegurar que el directorio padre existe
+const targetParentDir = path.dirname(targetDir);
+if (!fs.existsSync(targetParentDir)) {
+  fs.mkdirSync(targetParentDir, { recursive: true });
+  console.log(`✅ Directorio padre creado: ${targetParentDir}`);
+}
+
 // Crear el directorio de destino si no existe
 if (!fs.existsSync(targetDir)) {
   fs.mkdirSync(targetDir, { recursive: true });
