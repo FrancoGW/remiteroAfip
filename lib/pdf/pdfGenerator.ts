@@ -30,7 +30,11 @@ function inicializarFuentesPDFKit(): string | null {
   // Lista exhaustiva de rutas posibles donde pueden estar las fuentes
   const posiblesRutas: string[] = [];
   
-  // Estrategia 1: Intentar usar require.resolve (puede funcionar en algunos entornos)
+  // Estrategia 1: Buscar en .next/server/pdfkit-fonts (donde webpack las copia durante el build)
+  posiblesRutas.push(path.join(process.cwd(), ".next", "server", "pdfkit-fonts"));
+  posiblesRutas.push("/var/task/.next/server/pdfkit-fonts");
+  
+  // Estrategia 2: Intentar usar require.resolve (puede funcionar en algunos entornos)
   try {
     const helveticaPath = require.resolve("pdfkit/js/data/Helvetica.afm");
     posiblesRutas.unshift(path.dirname(helveticaPath)); // Prioridad más alta
@@ -39,7 +43,7 @@ function inicializarFuentesPDFKit(): string | null {
     // Continuar con otras estrategias
   }
   
-  // Estrategia 2: Intentar obtener la ruta del módulo pdfkit usando require.cache
+  // Estrategia 3: Intentar obtener la ruta del módulo pdfkit usando require.cache
   try {
     require("pdfkit"); // Asegurar que el módulo esté cargado
     const pdfkitModule = require.cache[require.resolve("pdfkit")];
@@ -58,18 +62,18 @@ function inicializarFuentesPDFKit(): string | null {
     // Continuar
   }
   
-  // Estrategia 3: Rutas estándar en Vercel/Serverless
+  // Estrategia 4: Rutas estándar en Vercel/Serverless
   posiblesRutas.push("/var/task/node_modules/pdfkit/js/data");
   posiblesRutas.push("/var/task/node_modules/pdfkit/lib/js/data");
   posiblesRutas.push("/var/task/node_modules/pdfkit/data");
   
-  // Estrategia 4: Rutas relativas desde process.cwd()
+  // Estrategia 5: Rutas relativas desde process.cwd()
   const cwd = process.cwd();
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "js", "data"));
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "lib", "js", "data"));
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "data"));
   
-  // Estrategia 5: Rutas relativas desde __dirname (si está disponible)
+  // Estrategia 6: Rutas relativas desde __dirname (si está disponible)
   try {
     if (typeof __dirname !== 'undefined') {
       posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "js", "data"));
@@ -79,7 +83,7 @@ function inicializarFuentesPDFKit(): string | null {
     // __dirname puede no estar disponible en ESM
   }
   
-  // Estrategia 6: Intentar require.resolve del módulo principal (último recurso)
+  // Estrategia 7: Intentar require.resolve del módulo principal (último recurso)
   try {
     const pdfkitPath = require.resolve("pdfkit");
     const pdfkitDir = path.dirname(pdfkitPath);

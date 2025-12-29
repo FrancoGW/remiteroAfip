@@ -1,3 +1,11 @@
+import CopyWebpackPlugin from 'copy-webpack-plugin';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,14 +14,22 @@ const nextConfig = {
       // Configurar para que PDFKit pueda acceder a sus archivos
       config.externals = [...(config.externals || []), 'canvas', 'bufferutil', 'utf-8-validate'];
       
-      // Excluir archivos .afm e .icc de PDFKit del bundling
-      config.module.rules.push({
-        test: /\.(afm|icc)$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'static/chunks/[name][ext]',
-        },
-      });
+      // Copiar las fuentes de PDFKit a una ubicación accesible en producción
+      // Las copiamos al directorio de output del servidor
+      const pdfkitFontsSource = path.join(__dirname, 'node_modules/pdfkit/js/data');
+      if (fs.existsSync(pdfkitFontsSource)) {
+        config.plugins.push(
+          new CopyWebpackPlugin({
+            patterns: [
+              {
+                from: pdfkitFontsSource,
+                to: 'pdfkit-fonts', // Relativo al output.path del servidor
+                noErrorOnMissing: true,
+              },
+            ],
+          })
+        );
+      }
     }
     return config;
   },
