@@ -27,42 +27,157 @@ function inicializarFuentesPDFKit(): string | null {
     }
   }
 
+  // Lista exhaustiva de rutas posibles donde pueden estar las fuentes
+  const posiblesRutas: string[] = [];
+  
+  // Estrategia 1: Intentar usar require.resolve (puede funcionar en algunos entornos)
   try {
-    // Intentar resolver directamente un archivo de fuente usando require.resolve
-    // Esta es la forma más confiable de encontrar las fuentes
-    let fuenteRuta: string | null = null;
-    
-    try {
-      const helveticaPath = require.resolve("pdfkit/js/data/Helvetica.afm");
-      fuenteRuta = path.dirname(helveticaPath);
-      console.log(`✅ Fuentes encontradas usando require.resolve: ${fuenteRuta}`);
-    } catch (error) {
-      // Si falla, intentar otras estrategias
-      try {
-        const pdfkitPath = require.resolve("pdfkit");
-        const pdfkitDir = path.dirname(pdfkitPath);
-        const posibleRuta = path.join(pdfkitDir, "js", "data");
-        if (fs.existsSync(posibleRuta)) {
-          fuenteRuta = posibleRuta;
-          console.log(`✅ Fuentes encontradas en: ${fuenteRuta}`);
-        }
-      } catch (err) {
-        console.warn("⚠️ No se pudo resolver pdfkit con require.resolve");
+    const helveticaPath = require.resolve("pdfkit/js/data/Helvetica.afm");
+    posiblesRutas.unshift(path.dirname(helveticaPath)); // Prioridad más alta
+    console.log(`🔍 Intentando usar require.resolve: ${path.dirname(helveticaPath)}`);
+  } catch (error) {
+    // Continuar con otras estrategias
+  }
+  
+  // Estrategia 2: Intentar obtener la ruta del módulo pdfkit usando require.cache
+  try {
+    require("pdfkit"); // Asegurar que el módulo esté cargado
+    const pdfkitModule = require.cache[require.resolve("pdfkit")];
+    if (pdfkitModule && pdfkitModule.filename) {
+      const pdfkitDir = path.dirname(pdfkitModule.filename);
+      posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
+      posiblesRutas.push(path.join(pdfkitDir, "lib", "js", "data"));
+      posiblesRutas.push(path.join(pdfkitDir, "data"));
+      // Buscar recursivamente
+      for (let i = 0; i < 3; i++) {
+        const parentDir = path.join(pdfkitDir, ...Array(i).fill(".."), "js", "data");
+        posiblesRutas.push(parentDir);
       }
     }
-
-    if (!fuenteRuta || !fs.existsSync(fuenteRuta)) {
-      console.warn("⚠️ No se encontraron las fuentes de PDFKit");
-      // Si /tmp existe pero no tiene fuentes válidas, retornar null
-      return null;
+  } catch (error) {
+    // Continuar
+  }
+  
+  // Estrategia 3: Rutas estándar en Vercel/Serverless
+  posiblesRutas.push("/var/task/node_modules/pdfkit/js/data");
+  posiblesRutas.push("/var/task/node_modules/pdfkit/lib/js/data");
+  posiblesRutas.push("/var/task/node_modules/pdfkit/data");
+  
+  // Estrategia 4: Rutas relativas desde process.cwd()
+  const cwd = process.cwd();
+  posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "js", "data"));
+  posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "lib", "js", "data"));
+  posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "data"));
+  
+  // Estrategia 5: Rutas relativas desde __dirname (si está disponible)
+  try {
+    if (typeof __dirname !== 'undefined') {
+      posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "js", "data"));
+      posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "lib", "js", "data"));
     }
+  } catch (error) {
+    // __dirname puede no estar disponible en ESM
+  }
+  
+  // Estrategia 6: Intentar require.resolve del módulo principal (último recurso)
+  try {
+    const pdfkitPath = require.resolve("pdfkit");
+    const pdfkitDir = path.dirname(pdfkitPath);
+    posiblesRutas.push(path.join(pdfkitDir, "js", "data"));
+    posiblesRutas.push(path.join(pdfkitDir, "lib", "js", "data"));
+    posiblesRutas.push(path.join(pdfkitDir, "data"));
+  } catch (error) {
+    // require.resolve puede fallar en Next.js
+  }
 
+  // Buscar la primera ruta que exista y tenga archivos .afm
+  let fuenteRuta: string | null = null;
+  console.log(`🔍 Buscando fuentes de PDFKit en ${posiblesRutas.length} ubicaciones posibles...`);
+  
+  for (const ruta of posiblesRutas) {
+    try {
+      if (fs.existsSync(ruta)) {
+        const archivos = fs.readdirSync(ruta);
+        const tieneAFM = archivos.some((f) => f.endsWith(".afm"));
+        console.log(`  📂 ${ruta}: ${archivos.length} archivos, tiene .afm: ${tieneAFM}`);
+        if (tieneAFM) {
+          fuenteRuta = ruta;
+          console.log(`✅ Fuentes encontradas en: ${fuenteRuta}`);
+          break;
+        }
+      }
+    } catch (error: any) {
+      // Continuar con la siguiente ruta
+      console.log(`  ❌ Error accediendo ${ruta}: ${error.message}`);
+    }
+  }
+
+  // Si no encontramos, intentar búsqueda recursiva en node_modules
+  if (!fuenteRuta) {
+    console.log("🔍 Intentando búsqueda recursiva en node_modules...");
+    const nodeModulesPaths = [
+      path.join(process.cwd(), "node_modules"),
+      "/var/task/node_modules",
+    ];
+    
+    for (const nodeModulesPath of nodeModulesPaths) {
+      if (fs.existsSync(nodeModulesPath)) {
+        try {
+          const pdfkitPath = path.join(nodeModulesPath, "pdfkit");
+          if (fs.existsSync(pdfkitPath)) {
+            // Buscar recursivamente en pdfkit
+            const buscarRecursivo = (dir: string, depth: number = 0): string | null => {
+              if (depth > 5) return null; // Limitar profundidad
+              try {
+                const items = fs.readdirSync(dir);
+                for (const item of items) {
+                  const itemPath = path.join(dir, item);
+                  const stat = fs.statSync(itemPath);
+                  if (stat.isDirectory() && item === "data") {
+                    // Verificar si tiene archivos .afm
+                    const archivos = fs.readdirSync(itemPath);
+                    if (archivos.some((f) => f.endsWith(".afm"))) {
+                      return itemPath;
+                    }
+                  } else if (stat.isDirectory() && !item.startsWith(".")) {
+                    const resultado = buscarRecursivo(itemPath, depth + 1);
+                    if (resultado) return resultado;
+                  }
+                }
+              } catch (error) {
+                // Continuar
+              }
+              return null;
+            };
+            
+            const encontrado = buscarRecursivo(pdfkitPath);
+            if (encontrado) {
+              fuenteRuta = encontrado;
+              console.log(`✅ Fuentes encontradas (búsqueda recursiva) en: ${fuenteRuta}`);
+              break;
+            }
+          }
+        } catch (error) {
+          // Continuar
+        }
+      }
+    }
+  }
+
+  if (!fuenteRuta) {
+    console.warn("⚠️ No se encontraron las fuentes de PDFKit en ninguna ubicación estándar.");
+    console.warn(`   process.cwd(): ${process.cwd()}`);
+    console.warn(`   __dirname: ${typeof __dirname !== 'undefined' ? __dirname : 'no disponible'}`);
+    return null;
+  }
+
+  try {
     // Crear directorio temporal si no existe
     if (!fs.existsSync(TMP_FONT_DIR)) {
       fs.mkdirSync(TMP_FONT_DIR, { recursive: true });
     }
 
-    // Copiar todos los archivos .afm y .icc a /tmp (solo si no existen)
+    // Copiar todos los archivos .afm y .icc a /tmp
     const archivos = fs.readdirSync(fuenteRuta);
     let copiados = 0;
     let yaExistentes = 0;
@@ -70,7 +185,7 @@ function inicializarFuentesPDFKit(): string | null {
     for (const archivo of archivos) {
       if (archivo.endsWith(".afm") || archivo.endsWith(".icc")) {
         const destino = path.join(TMP_FONT_DIR, archivo);
-        // Solo copiar si no existe o si está desactualizado
+        // Solo copiar si no existe
         if (!fs.existsSync(destino)) {
           try {
             const origen = path.join(fuenteRuta, archivo);
@@ -93,7 +208,7 @@ function inicializarFuentesPDFKit(): string | null {
       return TMP_FONT_DIR;
     }
   } catch (error) {
-    console.error("❌ Error inicializando fuentes de PDFKit:", error);
+    console.error("❌ Error copiando fuentes a /tmp:", error);
   }
 
   return null;
