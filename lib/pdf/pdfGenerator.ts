@@ -18,8 +18,9 @@ function inicializarFuentesPDFKit(): string | null {
     try {
       const archivos = fs.readdirSync(TMP_FONT_DIR);
       const tieneFuentes = archivos.some((f) => f.endsWith(".afm"));
-      if (tieneFuentes) {
+      if (tieneFuentes && archivos.filter((f) => f.endsWith(".afm")).length > 5) {
         fuentesInicializadas = true;
+        console.log(`✅ Fuentes ya inicializadas en ${TMP_FONT_DIR}`);
         return TMP_FONT_DIR;
       }
     } catch (error) {
@@ -41,12 +42,17 @@ function inicializarFuentesPDFKit(): string | null {
   try {
     const pdfkitPath = require.resolve("pdfkit");
     const pdfkitDir = path.dirname(pdfkitPath);
-    // Construir la ruta manualmente (NO usar require.resolve con .afm porque webpack intentará procesarlo)
+    // pdfkitPath es algo como "pdfkit/js/pdfkit.js", así que pdfkitDir es "pdfkit/js"
+    // Las fuentes están en "pdfkit/js/data"
     const dataPath = path.join(pdfkitDir, "data");
-    posiblesRutas.unshift(dataPath); // Prioridad más alta
-    console.log(`🔍 Intentando usar require.resolve (módulo): ${dataPath}`);
-  } catch (error) {
-    // Continuar con otras estrategias
+    
+    // Prioridad más alta: datos junto al módulo
+    posiblesRutas.unshift(dataPath);
+    console.log(`🔍 require.resolve("pdfkit"): ${pdfkitPath}`);
+    console.log(`🔍 PDFKit dir: ${pdfkitDir}`);
+    console.log(`🔍 Datos esperados en: ${dataPath}`);
+  } catch (error: any) {
+    console.log(`⚠️ require.resolve("pdfkit") falló: ${error.message}`);
   }
   
   // Estrategia 3: Intentar obtener la ruta del módulo pdfkit usando require.cache
