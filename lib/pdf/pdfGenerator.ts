@@ -63,7 +63,7 @@ function encontrarRutaFuentesPDFKit(): string | null {
     }
   }
 
-  console.warn("⚠️ No se encontraron las fuentes de PDFKit. PDFKit usará fuentes por defecto.");
+  console.warn("⚠️ No se encontraron las fuentes de PDFKit.");
   return null;
 }
 
@@ -85,12 +85,12 @@ export class PDFGenerator {
   static generarRemitoPDF(remito: Remito): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
-        // Asegurar que la variable de entorno esté configurada
-        if (!process.env.PDFKIT_FONT_PATH) {
-          const rutaEncontrada = encontrarRutaFuentesPDFKit();
-          if (rutaEncontrada) {
-            process.env.PDFKIT_FONT_PATH = rutaEncontrada;
-          }
+        // Encontrar la ruta de fuentes en tiempo de ejecución
+        const rutaEncontrada = encontrarRutaFuentesPDFKit();
+        
+        // Configurar la variable de entorno que PDFKit usa internamente
+        if (rutaEncontrada) {
+          process.env.PDFKIT_FONT_PATH = rutaEncontrada;
         }
 
         const doc = new PDFDocument({
@@ -104,11 +104,50 @@ export class PDFGenerator {
         });
 
         const buffers: Buffer[] = [];
+        const originalReadFileSync = fs.readFileSync;
+        let fontPathMap: Map<string, string> | null = null;
+        
+        // Configurar el patch de fs.readFileSync si encontramos fuentes
+        if (rutaEncontrada) {
+          fontPathMap = new Map<string, string>();
+          try {
+            const archivos = fs.readdirSync(rutaEncontrada);
+            archivos.filter((f) => f.endsWith(".afm")).forEach((archivo) => {
+              const rutaCompleta = path.join(rutaEncontrada!, archivo);
+              // Mapear posibles rutas que PDFKit podría buscar
+              fontPathMap!.set(`/var/task/.next/server/chunks/data/${archivo}`, rutaCompleta);
+              fontPathMap!.set(path.join(process.cwd(), ".next", "server", "chunks", "data", archivo), rutaCompleta);
+              fontPathMap!.set(path.join(process.cwd(), ".next", "server", "vendor-chunks", "data", archivo), rutaCompleta);
+            });
+            
+            // Patch fs.readFileSync
+            (fs as any).readFileSync = function(filePath: string, ...args: any[]) {
+              if (typeof filePath === 'string' && filePath.endsWith('.afm') && fontPathMap!.has(filePath)) {
+                const rutaReal = fontPathMap!.get(filePath)!;
+                return originalReadFileSync.call(fs, rutaReal, ...args);
+              }
+              return originalReadFileSync.call(fs, filePath, ...args);
+            };
+          } catch (error) {
+            console.warn("⚠️ Error configurando patch de fuentes:", error);
+          }
+        }
+        
         doc.on("data", buffers.push.bind(buffers));
         doc.on("end", () => {
+          // Restaurar fs.readFileSync antes de resolver
+          if (fontPathMap) {
+            (fs as any).readFileSync = originalReadFileSync;
+          }
           resolve(Buffer.concat(buffers));
         });
-        doc.on("error", reject);
+        doc.on("error", (error) => {
+          // Restaurar fs.readFileSync antes de rechazar
+          if (fontPathMap) {
+            (fs as any).readFileSync = originalReadFileSync;
+          }
+          reject(error);
+        });
 
         // Todo en negro
         const colorNegro = "#000000";
