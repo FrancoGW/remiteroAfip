@@ -38,24 +38,41 @@ function inicializarFuentesPDFKit(): string | null {
   // También buscar en la raíz del proyecto en caso de que .next esté en otro lugar
   posiblesRutas.push(path.join(process.cwd(), "..", ".next", "server", "pdfkit-fonts"));
   
-  // Estrategia 2: Intentar usar require.resolve del módulo pdfkit (NO de archivos .afm directamente)
+  // Estrategia 2: Usar __dirname para navegar a node_modules (funciona en Vercel)
+  // En Vercel, __dirname es algo como "/var/task/.next/server/chunks"
+  // Desde ahí navegamos hacia arriba hasta node_modules
+  if (typeof __dirname !== 'undefined') {
+    try {
+      // Navegar desde .next/server/chunks hasta node_modules/pdfkit/js/data
+      const basePath = path.resolve(__dirname, '..', '..', '..');
+      const pdfkitDataPath = path.join(basePath, 'node_modules', 'pdfkit', 'js', 'data');
+      posiblesRutas.unshift(pdfkitDataPath);
+      console.log(`🔍 __dirname: ${__dirname}`);
+      console.log(`🔍 Base path: ${basePath}`);
+      console.log(`🔍 PDFKit data path desde __dirname: ${pdfkitDataPath}`);
+    } catch (error: any) {
+      console.log(`⚠️ Error construyendo ruta desde __dirname: ${error.message}`);
+    }
+  }
+  
+  // Estrategia 3: Intentar usar require.resolve del módulo pdfkit (puede fallar en Vercel)
   try {
     const pdfkitPath = require.resolve("pdfkit");
-    const pdfkitDir = path.dirname(pdfkitPath);
-    // pdfkitPath es algo como "pdfkit/js/pdfkit.js", así que pdfkitDir es "pdfkit/js"
-    // Las fuentes están en "pdfkit/js/data"
-    const dataPath = path.join(pdfkitDir, "data");
-    
-    // Prioridad más alta: datos junto al módulo
-    posiblesRutas.unshift(dataPath);
-    console.log(`🔍 require.resolve("pdfkit"): ${pdfkitPath}`);
-    console.log(`🔍 PDFKit dir: ${pdfkitDir}`);
-    console.log(`🔍 Datos esperados en: ${dataPath}`);
+    // Verificar que sea un string (en Vercel a veces devuelve números)
+    if (typeof pdfkitPath === 'string') {
+      const pdfkitDir = path.dirname(pdfkitPath);
+      const dataPath = path.join(pdfkitDir, "data");
+      posiblesRutas.unshift(dataPath);
+      console.log(`🔍 require.resolve("pdfkit"): ${pdfkitPath}`);
+      console.log(`🔍 Datos esperados en: ${dataPath}`);
+    } else {
+      console.log(`⚠️ require.resolve("pdfkit") devolvió un número, omitiendo`);
+    }
   } catch (error: any) {
     console.log(`⚠️ require.resolve("pdfkit") falló: ${error.message}`);
   }
   
-  // Estrategia 3: Intentar obtener la ruta del módulo pdfkit usando require.cache
+  // Estrategia 4: Intentar obtener la ruta del módulo pdfkit usando require.cache
   try {
     require("pdfkit"); // Asegurar que el módulo esté cargado
     const pdfkitModule = require.cache[require.resolve("pdfkit")];
@@ -74,26 +91,16 @@ function inicializarFuentesPDFKit(): string | null {
     // Continuar
   }
   
-  // Estrategia 4: Rutas estándar en Vercel/Serverless
+  // Estrategia 5: Rutas estándar en Vercel/Serverless
   posiblesRutas.push("/var/task/node_modules/pdfkit/js/data");
   posiblesRutas.push("/var/task/node_modules/pdfkit/lib/js/data");
   posiblesRutas.push("/var/task/node_modules/pdfkit/data");
   
-  // Estrategia 5: Rutas relativas desde process.cwd()
+  // Estrategia 6: Rutas relativas desde process.cwd()
   const cwd = process.cwd();
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "js", "data"));
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "lib", "js", "data"));
   posiblesRutas.push(path.join(cwd, "node_modules", "pdfkit", "data"));
-  
-  // Estrategia 6: Rutas relativas desde __dirname (si está disponible)
-  try {
-    if (typeof __dirname !== 'undefined') {
-      posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "js", "data"));
-      posiblesRutas.push(path.join(__dirname, "..", "..", "..", "node_modules", "pdfkit", "lib", "js", "data"));
-    }
-  } catch (error) {
-    // __dirname puede no estar disponible en ESM
-  }
   
   // Estrategia 7: Intentar require.resolve del módulo principal (último recurso)
   try {
