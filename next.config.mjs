@@ -1,4 +1,5 @@
 import CopyWebpackPlugin from 'copy-webpack-plugin';
+import webpack from 'webpack';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -14,8 +15,18 @@ const nextConfig = {
       // Configurar para que PDFKit pueda acceder a sus archivos
       config.externals = [...(config.externals || []), 'canvas', 'bufferutil', 'utf-8-validate'];
       
-      // Copiar las fuentes de PDFKit a una ubicación accesible en producción
-      // Las copiamos al directorio de output del servidor
+      // IMPORTANTE: Ignorar archivos .afm e .icc completamente del bundling
+      // Webpack NO debe intentar procesarlos porque no son módulos JavaScript
+      // Usamos IgnorePlugin para excluirlos completamente
+      config.plugins.push(
+        new webpack.IgnorePlugin({
+          resourceRegExp: /\.(afm|icc)$/,
+          contextRegExp: /node_modules\/pdfkit/,
+        })
+      );
+      
+      // Copiar las fuentes de PDFKit al directorio de output del servidor
+      // para que estén disponibles en runtime
       const pdfkitFontsSource = path.join(__dirname, 'node_modules/pdfkit/js/data');
       if (fs.existsSync(pdfkitFontsSource)) {
         config.plugins.push(

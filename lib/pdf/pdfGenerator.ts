@@ -34,11 +34,14 @@ function inicializarFuentesPDFKit(): string | null {
   posiblesRutas.push(path.join(process.cwd(), ".next", "server", "pdfkit-fonts"));
   posiblesRutas.push("/var/task/.next/server/pdfkit-fonts");
   
-  // Estrategia 2: Intentar usar require.resolve (puede funcionar en algunos entornos)
+  // Estrategia 2: Intentar usar require.resolve del módulo pdfkit (NO de archivos .afm directamente)
   try {
-    const helveticaPath = require.resolve("pdfkit/js/data/Helvetica.afm");
-    posiblesRutas.unshift(path.dirname(helveticaPath)); // Prioridad más alta
-    console.log(`🔍 Intentando usar require.resolve: ${path.dirname(helveticaPath)}`);
+    const pdfkitPath = require.resolve("pdfkit");
+    const pdfkitDir = path.dirname(pdfkitPath);
+    // Construir la ruta manualmente (NO usar require.resolve con .afm porque webpack intentará procesarlo)
+    const dataPath = path.join(pdfkitDir, "data");
+    posiblesRutas.unshift(dataPath); // Prioridad más alta
+    console.log(`🔍 Intentando usar require.resolve (módulo): ${dataPath}`);
   } catch (error) {
     // Continuar con otras estrategias
   }
