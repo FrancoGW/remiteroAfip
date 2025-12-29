@@ -7,8 +7,13 @@ import { PDFGenerator } from './pdfGenerator';
  * Si el servicio Python no está disponible, usa PDFKit como fallback
  */
 export class PDFService {
-  private static PDF_SERVICE_URL = process.env.PDF_SERVICE_URL || 'http://localhost:8000';
-  private static USE_PYTHON_SERVICE = process.env.PDF_SERVICE_URL ? true : false;
+  private static getPDFServiceURL(): string {
+    const url = process.env.PDF_SERVICE_URL || 'http://localhost:8000';
+    // Asegurar que la URL no termine en /
+    return url.replace(/\/+$/, '');
+  }
+  
+  private static USE_PYTHON_SERVICE = !!process.env.PDF_SERVICE_URL;
   
   /**
    * Genera un PDF del remito llamando al servicio Python
@@ -22,11 +27,16 @@ export class PDFService {
     }
 
     try {
+      const serviceURL = this.getPDFServiceURL();
+      const generateURL = `${serviceURL}/generate`;
+      
+      console.log(`🔗 Llamando al servicio PDF: ${generateURL}`);
+      
       // Intentar llamar al servicio Python
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
       
-      const response = await fetch(`${this.PDF_SERVICE_URL}/generate`, {
+      const response = await fetch(generateURL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,7 +48,8 @@ export class PDFService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Servicio PDF respondió con error: ${response.status}`);
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Servicio PDF respondió con error: ${response.status} - ${errorText}`);
       }
 
       // Obtener el PDF como buffer
