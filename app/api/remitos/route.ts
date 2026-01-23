@@ -214,11 +214,14 @@ export async function POST(request: NextRequest) {
     // PERO: Para integración con otro sistema, mejor devolver solo el ID
     // y que descarguen el PDF con otro endpoint
     if (returnPdf) {
-      const response = new NextResponse(pdfBuffer, {
+      // Convertir Buffer a Uint8Array para NextResponse
+      const pdfArray = new Uint8Array(pdfBuffer);
+      const response = new NextResponse(pdfArray, {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="remito-${nuevoRemito.numeroRemito || nuevoRemito.id}.pdf"`,
+          'Content-Length': pdfBuffer.length.toString(),
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
