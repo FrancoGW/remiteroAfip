@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
 
+type MongooseType = typeof mongoose;
+
 declare global {
   var mongoose: {
-    conn: typeof mongoose | null;
-    promise: Promise<typeof mongoose> | null;
+    conn: MongooseType | null;
+    promise: Promise<MongooseType> | null;
   };
 }
 
