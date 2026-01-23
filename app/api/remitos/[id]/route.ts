@@ -11,7 +11,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const remito = remitosStorageService.getById(id);
+    const remito = await remitosStorageService.getById(id);
 
     if (!remito) {
       return NextResponse.json(

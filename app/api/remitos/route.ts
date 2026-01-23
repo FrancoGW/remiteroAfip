@@ -9,19 +9,46 @@ import { remitosStorageService } from "@/lib/storage/remitosStorage";
  */
 export async function GET(request: NextRequest) {
   try {
-    return NextResponse.json({
+    const remitos = await remitosStorageService.getAll();
+    
+    const response = NextResponse.json({
       success: true,
-      remitos: remitosStorageService.getAll(),
+      remitos: remitos,
     });
+    
+    // Habilitar CORS para requests externos
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    return response;
   } catch (error: any) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         error: error.message,
       },
       { status: 500 }
     );
+    
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    return response;
   }
+}
+
+/**
+ * OPTIONS /api/remitos
+ * Maneja preflight requests para CORS
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
 
 /**
@@ -53,6 +80,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verificar si se solicita el PDF directamente
+    const url = new URL(request.url);
+    const returnPdf = url.searchParams.get('returnPdf') === 'true' || 
+                     request.headers.get('accept') === 'application/pdf';
+    
     const remito: Remito = await request.json();
 
     // Validaciones
@@ -136,17 +168,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (errores.length > 0) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           success: false,
           errores: errores,
         },
         { status: 400 }
       );
+      
+      // Habilitar CORS
+      response.headers.set('Access-Control-Allow-Origin', '*');
+      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      
+      return response;
     }
 
-    // Generar número de remito (simulado - en producción usar secuencia de base de datos)
-    const numeroRemito = remitosStorageService.getAll().length + 1;
+    // Generar número de remito (obtener el último número de remito y sumar 1)
+    const todosRemitos = await remitosStorageService.getAll();
+    const ultimoNumero = todosRemitos.length > 0 
+      ? Math.max(...todosRemitos.map(r => r.numeroRemito || 0))
+      : 0;
+    const numeroRemito = ultimoNumero + 1;
     const fechaCreacion = new Date().toISOString();
     
     // Crear remito completo con datos generados
@@ -163,12 +206,30 @@ export async function POST(request: NextRequest) {
 
     // Generar PDF del remito usando el nuevo servicio (pdfmake)
     const pdfBuffer = await PDFService.generarRemitoPDF(nuevoRemito);
+
+    // Guardar en MongoDB
+    await remitosStorageService.save(nuevoRemito);
+
+    // Si se solicita el PDF directamente, devolverlo como archivo
+    // PERO: Para integración con otro sistema, mejor devolver solo el ID
+    // y que descarguen el PDF con otro endpoint
+    if (returnPdf) {
+      const response = new NextResponse(pdfBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="remito-${nuevoRemito.numeroRemito || nuevoRemito.id}.pdf"`,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+        },
+      });
+      return response;
+    }
+
+    // Si no, devolver JSON con base64 (comportamiento por defecto)
     const pdfBase64 = pdfBuffer.toString("base64");
-
-    // Guardar en el almacenamiento
-    remitosStorageService.save(nuevoRemito);
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       cae: nuevoRemito.cae,
       vencimientoCae: nuevoRemito.vencimientoCae,
@@ -176,15 +237,29 @@ export async function POST(request: NextRequest) {
       remito: nuevoRemito,
       pdfBase64: pdfBase64,
     });
+    
+    // Habilitar CORS
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    
+    return response;
   } catch (error: any) {
     console.error("Error en POST /api/remitos:", error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: false,
         errores: [error.message || "Error al procesar el remito"],
       },
       { status: 500 }
     );
+    
+    // Habilitar CORS
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    return response;
   }
 }
 
