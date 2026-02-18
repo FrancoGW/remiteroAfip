@@ -8,6 +8,7 @@ export default function RemitoList() {
   const [remitos, setRemitos] = useState<Remito[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRemito, setSelectedRemito] = useState<Remito | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
     loadRemitos();
@@ -52,6 +53,7 @@ export default function RemitoList() {
   };
 
   const descargarPDF = async (remitoId: string, numeroRemito?: number) => {
+    setPdfError(null);
     try {
       const response = await fetch(`/api/remitos/${remitoId}/pdf`);
       if (response.ok) {
@@ -65,9 +67,14 @@ export default function RemitoList() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       } else {
-        console.error("Error al descargar el PDF");
+        const data = await response.json().catch(() => ({}));
+        const msg = data?.error || "Error al descargar el PDF";
+        setPdfError(msg);
+        console.error("Error al descargar el PDF:", msg);
       }
-    } catch (error) {
+    } catch (error: any) {
+      const msg = error?.message || "Error al descargar el PDF";
+      setPdfError(msg);
       console.error("Error al descargar PDF:", error);
     }
   };
@@ -96,6 +103,18 @@ export default function RemitoList() {
 
   return (
     <div className="space-y-4">
+      {pdfError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start justify-between gap-3">
+          <p className="text-sm text-amber-800 flex-1">{pdfError}</p>
+          <button
+            type="button"
+            onClick={() => setPdfError(null)}
+            className="text-amber-600 hover:text-amber-800 font-medium text-sm"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">
           Remitos Generados ({remitos.length})

@@ -204,48 +204,63 @@ export async function POST(request: NextRequest) {
       fechaCreacion: fechaCreacion,
     };
 
-    // Generar PDF del remito usando el nuevo servicio (pdfmake)
-    const pdfBuffer = await PDFService.generarRemitoPDF(nuevoRemito);
-
-    // Guardar en MongoDB
+    // Guardar en MongoDB primero (así el remito existe aunque falle el PDF)
     await remitosStorageService.save(nuevoRemito);
 
-    // Si se solicita el PDF directamente, devolverlo como archivo
-    // PERO: Para integración con otro sistema, mejor devolver solo el ID
-    // y que descarguen el PDF con otro endpoint
-    if (returnPdf) {
-      // Convertir Buffer a Uint8Array para NextResponse
+    // Generar PDF; si falla (ej. fuentes PDFKit en Vercel), igual devolvemos éxito con el remito
+    let pdfBuffer: Buffer | null = null;
+    try {
+      pdfBuffer = await PDFService.generarRemitoPDF(nuevoRemito);
+    } catch (pdfError: any) {
+      console.warn("PDF no generado (remito guardado igual):", pdfError?.message || pdfError);
+      // Si el cliente pidió PDF explícitamente, devolver error
+      if (returnPdf) {
+        const response = NextResponse.json(
+          {
+            success: false,
+            errores: [
+              "Remito creado correctamente pero no se pudo generar el PDF en este entorno. Descargue el PDF desde el panel o configure PDF_SERVICE_URL.",
+            ],
+          },
+          { status: 500 }
+        );
+        response.headers.set("Access-Control-Allow-Origin", "*");
+        return response;
+      }
+    }
+
+    // Si se solicitó el PDF directamente y lo tenemos
+    if (returnPdf && pdfBuffer) {
       const pdfArray = new Uint8Array(pdfBuffer);
       const response = new NextResponse(pdfArray, {
         status: 200,
         headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="remito-${nuevoRemito.numeroRemito || nuevoRemito.id}.pdf"`,
-          'Content-Length': pdfBuffer.length.toString(),
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="remito-${nuevoRemito.numeroRemito || nuevoRemito.id}.pdf"`,
+          "Content-Length": pdfBuffer.length.toString(),
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
         },
       });
       return response;
     }
 
-    // Si no, devolver JSON con base64 (comportamiento por defecto)
-    const pdfBase64 = pdfBuffer.toString("base64");
+    // Respuesta JSON: con pdfBase64 si se generó, o null y mensaje si no
     const response = NextResponse.json({
       success: true,
       cae: nuevoRemito.cae,
       vencimientoCae: nuevoRemito.vencimientoCae,
       numeroRemito: nuevoRemito.numeroRemito,
       remito: nuevoRemito,
-      pdfBase64: pdfBase64,
+      pdfBase64: pdfBuffer ? pdfBuffer.toString("base64") : null,
+      ...(pdfBuffer ? {} : { mensaje: "Remito creado. El PDF no está disponible en este entorno; use GET /api/remitos/:id/pdf o el panel para descargarlo." }),
     });
-    
-    // Habilitar CORS
-    response.headers.set('Access-Control-Allow-Origin', '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-    
+
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
+
     return response;
   } catch (error: any) {
     console.error("Error en POST /api/remitos:", error);

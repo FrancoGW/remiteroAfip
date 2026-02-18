@@ -1,12 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { FileText, CheckCircle, AlertCircle, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { FileText, CheckCircle, AlertCircle, Info, LogOut } from "lucide-react";
 import RemitoForm from "@/components/RemitoForm";
 import RemitoList from "@/components/RemitoList";
 
 export default function Home() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"new" | "list">("new");
+  const [authenticated, setAuthenticated] = useState(false);
+  const [username, setUsername] = useState("");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/auth/check");
+      const data = await response.json();
+      
+      if (data.authenticated) {
+        setAuthenticated(true);
+        setUsername(data.username || "");
+      } else {
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("Error verificando autenticación:", error);
+      router.push("/login");
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/login", {
+        method: "DELETE",
+      });
+      setAuthenticated(false);
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      // Redirigir de todas formas
+      router.push("/login");
+    }
+  };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -23,9 +78,24 @@ export default function Home() {
                   Sistema profesional de gestión de remitos electrónicos
                 </p>
               </div>
-              <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
-                <Info size={18} className="text-blue-600" />
-                <span className="text-sm text-blue-900 font-medium">Modo Desarrollo</span>
+              <div className="flex items-center gap-3">
+                <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                  <Info size={18} className="text-blue-600" />
+                  <span className="text-sm text-blue-900 font-medium">Modo Desarrollo</span>
+                </div>
+                {username && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">Bienvenido, <strong>{username}</strong></span>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
+                      title="Cerrar sesión"
+                    >
+                      <LogOut size={16} />
+                      <span className="hidden md:inline">Salir</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

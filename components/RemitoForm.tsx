@@ -107,15 +107,14 @@ export default function RemitoForm() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       } else {
-        setMessage({
-          type: "error",
-          text: "Error al descargar el PDF",
-        });
+        const data = await response.json().catch(() => ({}));
+        const msg = data?.error || "Error al descargar el PDF";
+        setMessage({ type: "error", text: msg });
       }
     } catch (error: any) {
       setMessage({
         type: "error",
-        text: `Error al descargar PDF: ${error.message}`,
+        text: error?.message || "Error al descargar el PDF",
       });
     }
   };

@@ -63,14 +63,17 @@ export async function GET(
     });
   } catch (error: any) {
     console.error("Error generando PDF:", error);
+    const isFontError = String(error?.message || "").includes("fuentes de PDFKit");
     const response = NextResponse.json(
       {
         success: false,
-        error: error.message || "Error al generar el PDF",
+        error: isFontError
+          ? "La generación de PDF no está disponible en este entorno. Configure PDF_SERVICE_URL (servicio Python) para habilitarla."
+          : error.message || "Error al generar el PDF",
       },
-      { status: 500 }
+      { status: 503 }
     );
-    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set("Access-Control-Allow-Origin", "*");
     return response;
   }
 }
