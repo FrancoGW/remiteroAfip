@@ -8,7 +8,11 @@ import { PDFGenerator } from './pdfGenerator';
  */
 export class PDFService {
   private static getPDFServiceURL(): string {
-    const url = process.env.PDF_SERVICE_URL || 'http://localhost:8000';
+    let url = (process.env.PDF_SERVICE_URL || 'http://localhost:8000').trim();
+    // Si no tiene protocolo, agregar https:// (común si se copió solo el dominio desde Railway)
+    if (url && !/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
     // Asegurar que la URL no termine en /
     return url.replace(/\/+$/, '');
   }
