@@ -70,6 +70,24 @@ curl -X POST "https://remitero-afip.vercel.app/api/remitos/123/enviar" \
 
 ## Variables de entorno
 
+### Twilio + PDF (importante: error 63019)
+
+Twilio descarga el PDF desde una URL pública. Si esa URL es tu API (`/api/remitos/.../pdf`), a veces **falla con error 63019** (timeout o respuesta no válida).
+
+**Recomendado:** activar **Vercel Blob** y la variable:
+
+| Variable | Descripción |
+|----------|-------------|
+| `BLOB_READ_WRITE_TOKEN` | Token de lectura/escritura de [Vercel Blob](https://vercel.com/docs/storage/vercel-blob). Con esto el PDF se sube a un archivo público en CDN y Twilio lo descarga sin problema. |
+
+En Vercel: **Storage → Create Blob Store** → conectalo al proyecto → se crea `BLOB_READ_WRITE_TOKEN` automáticamente.
+
+Opcional pero útil:
+
+| Variable | Descripción |
+|----------|-------------|
+| `NEXT_PUBLIC_APP_URL` | URL canónica de la app (ej. `https://remitero-afip.vercel.app`). Si no usás Blob, ayuda a que la URL del PDF sea la correcta. |
+
 ### WhatsApp (Twilio)
 
 Configurar en Vercel (o `.env.local` en local):

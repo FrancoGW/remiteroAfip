@@ -3,13 +3,7 @@ import { remitosStorageService } from "@/lib/storage/remitosStorage";
 import { PDFService } from "@/lib/pdf/pdfService";
 import { enviarRemitoPorWhatsApp } from "@/lib/send/whatsapp";
 import { enviarRemitoPorEmail } from "@/lib/send/email";
-
-function getBaseUrl(): string {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  return process.env.NEXT_PUBLIC_APP_URL || "https://remitero-afip.vercel.app";
-}
+import { getPdfUrlForTwilio } from "@/lib/send/twilioPdfUrl";
 
 /**
  * POST /api/remitos/[id]/enviar
@@ -55,28 +49,45 @@ export async function POST(
     }
 
     const numeroRemito = String(remito.numeroRemito ?? remito.id ?? id);
-    const baseUrl = getBaseUrl();
-    const pdfUrl = `${baseUrl}/api/remitos/${id}/pdf`;
 
     const resultadosWhatsApp: { numero: string; success: boolean; error?: string }[] = [];
     const resultadosEmail: { email: string; success: boolean; error?: string }[] = [];
     const errores: string[] = [];
 
-    // WhatsApp: Twilio descarga el PDF desde nuestra URL
-    for (const numero of whatsapp) {
-      const n = String(numero).trim();
-      if (!n) continue;
-      const r = await enviarRemitoPorWhatsApp(n, pdfUrl, numeroRemito);
-      resultadosWhatsApp.push({ numero: n, success: r.success, error: r.error });
-      if (!r.success && r.error) errores.push(`WhatsApp ${n}: ${r.error}`);
-    }
-
-    // Email: generamos el PDF y lo adjuntamos
+    // Generar PDF una vez (WhatsApp + email). Twilio error 63019 suele ser porque no puede
+    // descargar a tiempo desde /api/.../pdf; con Vercel Blob la URL es estable y rápida.
     let pdfBuffer: Buffer | null = null;
     try {
       pdfBuffer = await PDFService.generarRemitoPDF(remito);
     } catch (e: any) {
       errores.push(`PDF: ${e?.message || "No se pudo generar el PDF"}`);
+    }
+
+    let pdfUrlParaTwilio: string | null = null;
+    if (whatsapp.length > 0 && pdfBuffer) {
+      try {
+        pdfUrlParaTwilio = await getPdfUrlForTwilio(id, pdfBuffer);
+      } catch (e: any) {
+        errores.push(`Subida PDF para WhatsApp: ${e?.message || e}`);
+      }
+    }
+
+    for (const numero of whatsapp) {
+      const n = String(numero).trim();
+      if (!n) continue;
+      if (!pdfUrlParaTwilio) {
+        resultadosWhatsApp.push({
+          numero: n,
+          success: false,
+          error: pdfBuffer
+            ? "No se pudo preparar la URL del PDF para Twilio"
+            : "No se pudo generar el PDF",
+        });
+        continue;
+      }
+      const r = await enviarRemitoPorWhatsApp(n, pdfUrlParaTwilio, numeroRemito);
+      resultadosWhatsApp.push({ numero: n, success: r.success, error: r.error });
+      if (!r.success && r.error) errores.push(`WhatsApp ${n}: ${r.error}`);
     }
 
     if (pdfBuffer) {
@@ -97,7 +108,12 @@ export async function POST(
       }
     }
 
-    const success = errores.length === 0;
+    const whatsappOk =
+      whatsapp.length === 0 || resultadosWhatsApp.every((r) => r.success);
+    const emailOk =
+      email.length === 0 || resultadosEmail.every((r) => r.success);
+    const success = whatsappOk && emailOk;
+
     const res = NextResponse.json({
       success,
       enviados: {
@@ -105,6 +121,12 @@ export async function POST(
         email: resultadosEmail,
       },
       ...(errores.length > 0 ? { errores } : {}),
+      ...(!process.env.BLOB_READ_WRITE_TOKEN && whatsapp.length > 0
+        ? {
+            aviso:
+              "Para evitar error 63019 de Twilio, configure BLOB_READ_WRITE_TOKEN (Vercel Blob) en Vercel.",
+          }
+        : {}),
     });
     res.headers.set("Access-Control-Allow-Origin", "*");
     res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
