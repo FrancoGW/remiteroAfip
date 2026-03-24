@@ -1,11 +1,23 @@
 /**
  * Envío de mensajes/archivos por WhatsApp vía Twilio
- * Requiere: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM
+ *
+ * Modo plantilla (recomendado, fuera de ventana 24 h):
+ *   TWILIO_WHATSAPP_CONTENT_SID = HX... (Content Template aprobado por WhatsApp)
+ *   Variables del template: {{1}} nombre, {{2}} nº remito, {{3}} URL pública del PDF
+ *
+ * Modo libre (solo si el usuario te escribió en las últimas 24 h):
+ *   Sin TWILIO_WHATSAPP_CONTENT_SID → body + mediaUrl
  */
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_WHATSAPP_FROM; // ej: whatsapp:+14155238886
+/** Leer env dentro de la función: en Vercel/Next el valor en el módulo puede quedar vacío y caer en modo libre (error 63016). */
+function getTwilioEnv() {
+  return {
+    accountSid: process.env.TWILIO_ACCOUNT_SID,
+    authToken: process.env.TWILIO_AUTH_TOKEN,
+    fromNumber: process.env.TWILIO_WHATSAPP_FROM,
+    contentSid: process.env.TWILIO_WHATSAPP_CONTENT_SID?.trim() || "",
+  };
+}
 
 export interface WhatsAppResult {
   success: boolean;
@@ -13,15 +25,28 @@ export interface WhatsAppResult {
   error?: string;
 }
 
+function normalizeToWhatsApp(numero: string): string {
+  const to = numero.replace(/\D/g, "").replace(/^0/, "");
+  return to.startsWith("54") ? `whatsapp:+${to}` : `whatsapp:+54${to}`;
+}
+
+function normalizeFrom(fromNumber: string): string {
+  return fromNumber.startsWith("whatsapp:") ? fromNumber : `whatsapp:${fromNumber}`;
+}
+
 /**
- * Envía el PDF del remito por WhatsApp a un número.
- * Twilio necesita una URL pública del PDF; usamos la URL de nuestra API.
+ * Envía el PDF del remito por WhatsApp.
+ * Si TWILIO_WHATSAPP_CONTENT_SID está definido, usa plantilla aprobada (Content API).
+ * Si no, mensaje libre + mediaUrl (requiere ventana 24 h o sandbox).
  */
 export async function enviarRemitoPorWhatsApp(
   numero: string,
   pdfUrl: string,
-  numeroRemito?: string
+  numeroRemito?: string,
+  nombreCliente?: string
 ): Promise<WhatsAppResult> {
+  const { accountSid, authToken, fromNumber, contentSid } = getTwilioEnv();
+
   if (!accountSid || !authToken || !fromNumber) {
     return {
       success: false,
@@ -32,16 +57,34 @@ export async function enviarRemitoPorWhatsApp(
   try {
     const twilio = (await import("twilio")).default;
     const client = twilio(accountSid, authToken);
+    const toWhatsApp = normalizeToWhatsApp(numero);
+    const from = normalizeFrom(fromNumber);
 
-    const to = numero.replace(/\D/g, "").replace(/^0/, ""); // solo dígitos, quitar 0 inicial
-    const toWhatsApp = to.startsWith("54") ? `whatsapp:+${to}` : `whatsapp:+54${to}`;
+    if (contentSid) {
+      const nombre = (nombreCliente || "Cliente").trim() || "Cliente";
+      const nro = numeroRemito || "";
+      const variables: Record<string, string> = {
+        "1": nombre,
+        "2": nro,
+        "3": pdfUrl,
+      };
+
+      const message = await client.messages.create({
+        from,
+        to: toWhatsApp,
+        contentSid,
+        contentVariables: JSON.stringify(variables),
+      });
+
+      return { success: true, sid: message.sid };
+    }
 
     const body = numeroRemito
       ? `Remito Nº ${numeroRemito} - Adjunto el comprobante en PDF.`
       : "Adjunto remito en PDF.";
 
     const message = await client.messages.create({
-      from: fromNumber.startsWith("whatsapp:") ? fromNumber : `whatsapp:${fromNumber}`,
+      from,
       to: toWhatsApp,
       body,
       mediaUrl: [pdfUrl],
