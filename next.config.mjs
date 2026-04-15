@@ -13,7 +13,15 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Configurar para que PDFKit pueda acceder a sus archivos
-      config.externals = [...(config.externals || []), 'canvas', 'bufferutil', 'utf-8-validate'];
+      config.externals = [
+        ...(config.externals || []),
+        'canvas',
+        'bufferutil',
+        'utf-8-validate',
+        // Paquetes de integración AFIP - deben correr en Node.js puro, sin bundling
+        'soap',
+        'node-forge',
+      ];
       
       // IMPORTANTE: Ignorar archivos .afm e .icc completamente del bundling
       // Webpack NO debe intentar procesarlos porque no son módulos JavaScript
@@ -49,6 +57,7 @@ const nextConfig = {
     AFIP_CERT_PATH: process.env.AFIP_CERT_PATH,
     AFIP_KEY_PATH: process.env.AFIP_KEY_PATH,
     AFIP_PRODUCTION: process.env.AFIP_PRODUCTION,
+    AFIP_PUNTO_VENTA: process.env.AFIP_PUNTO_VENTA,
     // TusFacturas.app Configuration
     TUSFACTURAS_API_KEY: process.env.TUSFACTURAS_API_KEY,
     TUSFACTURAS_API_TOKEN: process.env.TUSFACTURAS_API_TOKEN,

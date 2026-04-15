@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PDFService } from "@/lib/pdf/pdfService";
 import { Remito } from "@/lib/types/remito";
 import { remitosStorageService } from "@/lib/storage/remitosStorage";
+import { afipService } from "@/lib/afip/afipService";
 
 /**
  * GET /api/remitos
@@ -184,22 +185,32 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    // Generar número de remito (obtener el último número de remito y sumar 1)
-    const todosRemitos = await remitosStorageService.getAll();
-    const ultimoNumero = todosRemitos.length > 0 
-      ? Math.max(...todosRemitos.map(r => r.numeroRemito || 0))
-      : 0;
-    const numeroRemito = ultimoNumero + 1;
     const fechaCreacion = new Date().toISOString();
-    
-    // Crear remito completo con datos generados
+
+    // Solicitar CAE a AFIP (o simulación si no hay certificados configurados)
+    const afipResp = await afipService.generarRemito(remito);
+
+    if (!afipResp.success) {
+      const response = NextResponse.json(
+        {
+          success: false,
+          errores: afipResp.errores || ["Error al obtener autorización de AFIP"],
+        },
+        { status: 502 }
+      );
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      return response;
+    }
+
+    // Crear remito completo con los datos autorizados por AFIP
     const nuevoRemito: Remito = {
       ...remito,
       id: Date.now().toString(),
-      numeroRemito: numeroRemito,
-      // CAE simulado (en producción vendría de AFIP)
-      cae: `CAE-${Date.now()}`,
-      vencimientoCae: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 90 días desde hoy
+      numeroRemito: afipResp.numeroRemito,
+      cae: afipResp.cae,
+      vencimientoCae: afipResp.vencimientoCae,
       estado: "approved",
       fechaCreacion: fechaCreacion,
     };

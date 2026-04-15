@@ -1,231 +1,102 @@
-import Afip from "@afipsdk/afip.js";
-import { Remito, AfipResponse } from "../types/remito";
-import fs from "fs";
-
 /**
- * Servicio de integración con AFIP usando el SDK oficial @afipsdk/afip.js
- * 
- * Este servicio maneja:
- * - Autenticación automática con AFIP
- * - Generación de remitos electrónicos
- * - Consulta de remitos
- * - Modo desarrollo (sin certificados) y producción (con certificados)
- * 
- * Documentación: https://docs.afipsdk.com
+ * AfipService - Servicio principal de integración con AFIP/ARCA
+ *
+ * Implementación propia directa (sin SDK de terceros de pago).
+ * Usa WSAA para autenticación y WSFEv1 para remitos electrónicos.
+ *
+ * Tipo de comprobante: 91 (Remito R - Responsable Inscripto)
+ * Normativa aplicable: RG 5678/2025
  */
+
+import fs from "fs";
+import path from "path";
+import { Remito, AfipResponse } from "../types/remito";
+import { getServiceToken } from "./wsaa";
+import {
+  CBTE_TIPO_REMITO_R,
+  COND_IVA,
+  getLastVoucher,
+  requestCAE,
+  VoucherData,
+} from "./wsfev1";
+
+// ─── Servicio de AFIP para facturación electrónica ───────────────────────────
+const AFIP_SERVICE = "wsfe";
+
+// ─── Mapeo condición IVA texto → id AFIP ─────────────────────────────────────
+
+function condicionIvaId(condicion?: string): number {
+  if (!condicion) return COND_IVA.RESPONSABLE_INSCRIPTO;
+  const c = condicion.toUpperCase();
+  if (c.includes("MONOTRIB")) return COND_IVA.MONOTRIBUTISTA;
+  if (c.includes("EXENTO")) return COND_IVA.EXENTO;
+  if (c.includes("CONSUMIDOR")) return COND_IVA.CONSUMIDOR_FINAL;
+  return COND_IVA.RESPONSABLE_INSCRIPTO;
+}
+
+// ─── Clase principal ──────────────────────────────────────────────────────────
+
 export class AfipService {
-  private afip: any;
   private cuit: number;
   private production: boolean;
+  private cert: string | null = null;
+  private key: string | null = null;
+  private puntoVenta: number;
 
   constructor() {
-    const cuitString = process.env.AFIP_CUIT || "20409378472";
-    this.cuit = parseInt(cuitString.replace(/-/g, ""));
+    const cuitStr = process.env.AFIP_CUIT || "20409378472";
+    this.cuit = parseInt(cuitStr.replace(/-/g, ""), 10);
     this.production = process.env.AFIP_PRODUCTION === "true";
-    
-    // Configuración del SDK de AFIP
-    const config: any = {
-      CUIT: this.production ? this.cuit : 20409378472, // En desarrollo usa CUIT de prueba
-    };
+    this.puntoVenta = parseInt(process.env.AFIP_PUNTO_VENTA || "1", 10);
 
-    // Si estamos en producción y tenemos certificados, los cargamos
+    // Cargar certificados solo en producción o si están disponibles
     if (this.production) {
-      try {
-        const certPath = process.env.AFIP_CERT_PATH || "./certs/cert.crt";
-        const keyPath = process.env.AFIP_KEY_PATH || "./certs/private.key";
-        
-        if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-          config.cert = fs.readFileSync(certPath, { encoding: "utf8" });
-          config.key = fs.readFileSync(keyPath, { encoding: "utf8" });
-          config.CUIT = this.cuit;
-          console.log("✅ Certificados de AFIP cargados correctamente");
-        } else {
-          console.warn("⚠️ Certificados no encontrados. Usando modo desarrollo.");
-          this.production = false;
-          config.CUIT = 20409378472;
-        }
-      } catch (error) {
-        console.error("❌ Error cargando certificados:", error);
-        console.log("⚠️ Fallback a modo desarrollo");
+      this.loadCerts();
+      if (!this.cert || !this.key) {
+        console.warn(
+          "⚠️  Certificados no encontrados. Activando modo simulación."
+        );
         this.production = false;
-        config.CUIT = 20409378472;
       }
     } else {
-      console.log("🧪 Modo desarrollo activado - usando CUIT de prueba de AFIP");
-    }
-
-    // Inicializar SDK de AFIP
-    // El SDK maneja automáticamente:
-    // - Autenticación (WSAA)
-    // - Renovación de tickets
-    // - Firma digital
-    // - Llamadas a web services
-    this.afip = new Afip(config);
-  }
-
-  /**
-   * Genera un remito electrónico en AFIP
-   * 
-   * En modo desarrollo: Simula la respuesta de AFIP
-   * En modo producción: Llama al web service real de AFIP
-   * 
-   * @param remito - Datos del remito a generar
-   * @returns Respuesta con CAE, número de remito y observaciones
-   */
-  async generarRemito(remito: Remito): Promise<AfipResponse> {
-    try {
-      // Validar datos del remito
-      this.validarRemito(remito);
-
-      // En modo desarrollo, simular respuesta
-      if (!this.production) {
-        console.log("🧪 Generando remito en modo desarrollo (simulado)");
-        return this.simularRespuestaAfip(remito);
+      // Intentar cargar igualmente (puede estar configurado para homo)
+      this.loadCerts();
+      if (this.cert && this.key) {
+        console.log(
+          "🔐 Certificados cargados. Apuntando al ambiente de homologación AFIP."
+        );
+      } else {
+        console.log(
+          "🧪 Sin certificados. Usando modo simulación local (no conecta a AFIP)."
+        );
       }
-
-      console.log("📡 Generando remito en AFIP...");
-
-      // Preparar datos para el SDK de AFIP
-      // Nota: El SDK maneja principalmente facturación electrónica
-      // Para remitos específicos, se usa el mismo esquema con tipo de comprobante correspondiente
-      const remitoData = {
-        CbteTipo: remito.codigoTipoRemito, // Tipo de remito
-        PtoVta: remito.puntoVenta,
-        Concepto: 1, // 1=Productos, 2=Servicios, 3=Productos y Servicios
-        DocTipo: 80, // 80=CUIT
-        DocNro: parseInt(remito.cuitReceptor.replace(/-/g, "")),
-        CbteFch: remito.fechaEmision.replace(/-/g, ""),
-        ImpTotal: 0, // Los remitos generalmente no tienen importe
-        ImpTotConc: 0,
-        ImpNeto: 0,
-        ImpOpEx: 0,
-        ImpIVA: 0,
-        ImpTrib: 0,
-        MonId: "PES", // Pesos
-        MonCotiz: 1,
-      };
-
-      // Llamar al web service usando el SDK de AFIP
-      const response = await this.afip.ElectronicBilling.createVoucher(remitoData);
-
-      console.log("✅ Remito generado exitosamente en AFIP");
-
-      return {
-        success: true,
-        cae: response.CAE,
-        vencimientoCae: response.CAEFchVto,
-        numeroRemito: response.CbteDesde,
-        observaciones: response.Observaciones || ["Remito autorizado por AFIP"],
-      };
-    } catch (error: any) {
-      console.error("❌ Error generando remito:", error);
-      
-      // Si falla en desarrollo, usar simulación
-      if (!this.production) {
-        console.log("⚠️ Fallback a modo simulación");
-        return this.simularRespuestaAfip(remito);
-      }
-      
-      return {
-        success: false,
-        errores: [
-          error.message || "Error al comunicarse con AFIP",
-          "Verifica tu conexión y certificados"
-        ],
-      };
     }
   }
 
-  /**
-   * Consulta el estado de un remito en AFIP
-   * 
-   * @param puntoVenta - Punto de venta del remito
-   * @param numeroRemito - Número del remito a consultar
-   * @returns Información del remito desde AFIP
-   */
-  async consultarRemito(
-    puntoVenta: number,
-    numeroRemito: number
-  ): Promise<AfipResponse> {
+  private loadCerts(): void {
     try {
-      if (!this.production) {
-        // Simulación para desarrollo
-        console.log(`🧪 Consultando remito ${numeroRemito} (modo desarrollo)`);
-        return {
-          success: true,
-          cae: "12345678901234",
-          vencimientoCae: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0],
-          numeroRemito: numeroRemito,
-          observaciones: ["Remito aprobado (modo desarrollo)"],
-        };
-      }
-
-      console.log(`📡 Consultando remito ${numeroRemito} en AFIP...`);
-
-      // Consultar usando el SDK de AFIP
-      const response = await this.afip.ElectronicBilling.getVoucherInfo(
-        numeroRemito,
-        puntoVenta,
-        1 // Tipo de comprobante (remito)
+      const certPath = path.resolve(
+        process.env.AFIP_CERT_PATH || "./certs/cert.crt"
+      );
+      const keyPath = path.resolve(
+        process.env.AFIP_KEY_PATH || "./certs/private.key"
       );
 
-      console.log("✅ Información del remito obtenida");
-
-      return {
-        success: true,
-        cae: response.CAE,
-        vencimientoCae: response.CAEFchVto,
-        numeroRemito: response.CbteDesde,
-        observaciones: response.Observaciones || [],
-      };
-    } catch (error: any) {
-      console.error("❌ Error consultando remito:", error);
-      return {
-        success: false,
-        errores: [error.message || "Error al consultar remito en AFIP"],
-      };
-    }
-  }
-
-  /**
-   * Obtiene el último número de remito emitido para un punto de venta
-   * 
-   * @param puntoVenta - Punto de venta a consultar
-   * @returns Último número de remito emitido
-   */
-  async obtenerUltimoNumeroRemito(puntoVenta: number): Promise<number> {
-    try {
-      if (!this.production) {
-        // En desarrollo, retornar un número simulado
-        const numero = Math.floor(Math.random() * 1000) + 1;
-        console.log(`🧪 Último número de remito (simulado): ${numero}`);
-        return numero;
+      if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+        this.cert = fs.readFileSync(certPath, { encoding: "utf8" });
+        this.key = fs.readFileSync(keyPath, { encoding: "utf8" });
       }
-
-      console.log(`📡 Obteniendo último número de remito del punto de venta ${puntoVenta}...`);
-
-      // Obtener último número usando el SDK
-      const ultimoNumero = await this.afip.ElectronicBilling.getLastVoucher(
-        puntoVenta,
-        1 // Tipo de comprobante (remito)
-      );
-      
-      console.log(`✅ Último número: ${ultimoNumero}`);
-      return ultimoNumero || 0;
-    } catch (error: any) {
-      console.error("❌ Error obteniendo último número de remito:", error);
-      return 0;
+    } catch (err) {
+      console.error("❌ Error cargando certificados:", err);
     }
   }
 
-  /**
-   * Valida los datos del remito antes de enviarlo a AFIP
-   * 
-   * @param remito - Datos del remito a validar
-   * @throws Error si los datos son inválidos
-   */
+  private get hasCerts(): boolean {
+    return !!(this.cert && this.key);
+  }
+
+  // ─── Validación de datos del remito ────────────────────────────────────────
+
   private validarRemito(remito: Remito): void {
     const cuitEmisor = remito.cuitEmisor.replace(/-/g, "");
     const cuitReceptor = remito.cuitReceptor.replace(/-/g, "");
@@ -240,63 +111,219 @@ export class AfipService {
       throw new Error("El remito debe tener al menos un ítem");
     }
     if (remito.tipoTransporte === 2 && !remito.cuitTransportista) {
-      throw new Error("Se requiere CUIT del transportista para transporte de terceros");
+      throw new Error(
+        "Se requiere CUIT del transportista para transporte de terceros"
+      );
     }
-    if (!remito.nombreReceptor || remito.nombreReceptor.trim() === "") {
+    if (!remito.nombreReceptor?.trim()) {
       throw new Error("El nombre del receptor es obligatorio");
     }
     if (!remito.origenLocalidad || !remito.destinoLocalidad) {
-      throw new Error("Las localidades de origen y destino son obligatorias");
+      throw new Error(
+        "Las localidades de origen y destino son obligatorias"
+      );
     }
   }
 
-  /**
-   * Simula una respuesta exitosa de AFIP para desarrollo
-   * Esto permite probar el sistema sin tener certificados de AFIP
-   * 
-   * @param remito - Datos del remito
-   * @returns Respuesta simulada con CAE y número de remito
-   */
-  private simularRespuestaAfip(remito: Remito): AfipResponse {
-    // Generar datos simulados pero realistas
+  // ─── Modo simulación (sin certificados disponibles) ────────────────────────
+
+  private simularRespuesta(remito: Remito): AfipResponse {
     const numeroRemito = Math.floor(Math.random() * 100000) + 1;
-    const cae = String(Math.floor(Math.random() * 99999999999999) + 10000000000000);
+    const cae = String(
+      Math.floor(Math.random() * 89999999999999) + 10000000000000
+    );
     const vencimientoCae = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split("T")[0];
 
     return {
       success: true,
-      cae: cae,
-      vencimientoCae: vencimientoCae,
-      numeroRemito: numeroRemito,
+      cae,
+      vencimientoCae,
+      numeroRemito,
       observaciones: [
-        "✅ Remito generado exitosamente (MODO DESARROLLO)",
-        "⚠️ Este es un remito simulado para testing",
-        "💡 En producción, este remito sería enviado a AFIP",
-        `📄 Punto de venta: ${remito.puntoVenta}`,
-        `🚚 Tipo de transporte: ${remito.tipoTransporte === 1 ? "Propio" : "Tercero"}`,
+        "MODO SIMULACIÓN - Este CAE no es real",
+        "Configure AFIP_CERT_PATH y AFIP_KEY_PATH para conectar con AFIP",
+        `Punto de venta: ${remito.puntoVenta}`,
       ],
     };
   }
 
+  // ─── Generar remito real en AFIP ───────────────────────────────────────────
+
   /**
-   * Verifica si el servicio está en modo producción
-   * @returns true si está en modo producción, false si está en desarrollo
+   * Genera un remito electrónico en AFIP (CbteTipo 91 = Remito R).
+   * En modo simulación (sin certs) devuelve una respuesta de prueba.
    */
+  async generarRemito(remito: Remito): Promise<AfipResponse> {
+    try {
+      this.validarRemito(remito);
+
+      // Sin certificados → simulación
+      if (!this.hasCerts) {
+        console.log("🧪 Generando remito en modo simulación (sin certs)");
+        return this.simularRespuesta(remito);
+      }
+
+      console.log(
+        `📡 Conectando a AFIP ${this.production ? "PRODUCCIÓN" : "homologación"}...`
+      );
+
+      // 1. Obtener token de autenticación (WSAA)
+      const token = await getServiceToken(
+        AFIP_SERVICE,
+        this.cert!,
+        this.key!,
+        this.production
+      );
+
+      // 2. Obtener último número de comprobante autorizado
+      const puntoVenta = remito.puntoVenta || this.puntoVenta;
+      const lastNumber = await getLastVoucher(
+        this.cuit,
+        puntoVenta,
+        CBTE_TIPO_REMITO_R,
+        token,
+        this.production
+      );
+      const nextNumber = lastNumber + 1;
+
+      // 3. Preparar datos del comprobante
+      const fechaStr = remito.fechaEmision.replace(/-/g, "");
+      const cbteFch = parseInt(fechaStr, 10);
+
+      const docNro = parseInt(
+        remito.cuitReceptor.replace(/-/g, ""),
+        10
+      );
+
+      const voucherData: VoucherData = {
+        cuitEmisor: this.cuit,
+        puntoVenta,
+        cbteTipo: CBTE_TIPO_REMITO_R,
+        cbteFch,
+        docTipo: 80, // 80 = CUIT
+        docNro,
+        condicionIvaReceptorId: condicionIvaId(remito.condicionIva),
+      };
+
+      // 4. Solicitar CAE a AFIP
+      const caeResponse = await requestCAE(
+        voucherData,
+        nextNumber,
+        token,
+        this.production
+      );
+
+      console.log(
+        `✅ Remito ${nextNumber} autorizado por AFIP. CAE: ${caeResponse.cae}`
+      );
+
+      return {
+        success: true,
+        cae: caeResponse.cae,
+        vencimientoCae: caeResponse.caeFchVto,
+        numeroRemito: caeResponse.cbteDesde,
+        observaciones: ["Remito autorizado por AFIP/ARCA"],
+      };
+    } catch (error: any) {
+      console.error("❌ Error generando remito en AFIP:", error.message);
+
+      // En modo simulación nunca fallar con error real
+      if (!this.hasCerts) {
+        return this.simularRespuesta(remito);
+      }
+
+      return {
+        success: false,
+        errores: [
+          error.message || "Error al comunicarse con AFIP",
+          "Verificá los certificados, el punto de venta y la conectividad.",
+        ],
+      };
+    }
+  }
+
+  // ─── Consultar remito existente ────────────────────────────────────────────
+
+  async consultarRemito(
+    puntoVenta: number,
+    numeroRemito: number
+  ): Promise<AfipResponse> {
+    if (!this.hasCerts) {
+      return {
+        success: true,
+        cae: "SIMULADO",
+        vencimientoCae: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
+        numeroRemito,
+        observaciones: ["Consulta simulada (sin certificados)"],
+      };
+    }
+
+    try {
+      const token = await getServiceToken(
+        AFIP_SERVICE,
+        this.cert!,
+        this.key!,
+        this.production
+      );
+
+      const client = await import("soap").then((soap) => {
+        const wsdl = this.production
+          ? "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL"
+          : "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL";
+        return soap.createClientAsync(wsdl);
+      });
+
+      const [result] = await client.FECompConsultarAsync({
+        Auth: { Token: token.token, Sign: token.sign, Cuit: this.cuit },
+        FeCompConsReq: {
+          CbteTipo: CBTE_TIPO_REMITO_R,
+          CbteNro: numeroRemito,
+          PtoVta: puntoVenta,
+        },
+      });
+
+      const det = result?.FECompConsultarResult?.ResultGet;
+      if (!det) throw new Error("Respuesta vacía del WS");
+
+      const rawDate: string = String(det.CAEFchVto);
+      const vto =
+        rawDate.length === 8
+          ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+          : rawDate;
+
+      return {
+        success: true,
+        cae: String(det.CodAutorizacion),
+        vencimientoCae: vto,
+        numeroRemito: det.CbteDesde,
+        observaciones: [],
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        errores: [error.message || "Error al consultar remito en AFIP"],
+      };
+    }
+  }
+
+  // ─── Utilidades públicas ───────────────────────────────────────────────────
+
   public isProduction(): boolean {
     return this.production;
   }
 
-  /**
-   * Obtiene el CUIT configurado
-   * @returns CUIT del contribuyente
-   */
+  public hasCertificates(): boolean {
+    return this.hasCerts;
+  }
+
   public getCuit(): number {
     return this.cuit;
   }
 }
 
-// Exportar una instancia singleton del servicio
-// Esto asegura que todos usen la misma instancia y configuración
+// Singleton compartido por toda la aplicación
 export const afipService = new AfipService();
