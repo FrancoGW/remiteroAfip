@@ -31,18 +31,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const certPath = path.resolve(process.env.AFIP_CERT_PATH || "./certs/cert.crt");
-  const keyPath  = path.resolve(process.env.AFIP_KEY_PATH  || "./certs/private.key");
+  // Leer certificados: primero desde env vars (Vercel), luego desde archivos (local)
+  let certPem = process.env.AFIP_CERT_PEM?.replace(/\\n/g, "\n").trim() || "";
+  let keyPem  = process.env.AFIP_KEY_PEM?.replace(/\\n/g, "\n").trim()  || "";
 
-  if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-    return NextResponse.json(
-      { error: "No se encontraron los certificados. Verificá AFIP_CERT_PATH y AFIP_KEY_PATH." },
-      { status: 400 }
-    );
+  if (!certPem || !keyPem) {
+    const certPath = path.resolve(process.env.AFIP_CERT_PATH || "./certs/cert.crt");
+    const keyPath  = path.resolve(process.env.AFIP_KEY_PATH  || "./certs/private.key");
+
+    if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
+      return NextResponse.json(
+        {
+          error:
+            "No se encontraron los certificados. " +
+            "En Vercel configurá AFIP_CERT_PEM y AFIP_KEY_PEM con el contenido PEM completo.",
+        },
+        { status: 400 }
+      );
+    }
+
+    certPem = fs.readFileSync(certPath, "utf8");
+    keyPem  = fs.readFileSync(keyPath,  "utf8");
   }
-
-  const certPem = fs.readFileSync(certPath, "utf8");
-  const keyPem  = fs.readFileSync(keyPath,  "utf8");
   const cuit    = parseInt((process.env.AFIP_CUIT || "30693787285").replace(/\D/g, ""), 10);
 
   let body: any = {};

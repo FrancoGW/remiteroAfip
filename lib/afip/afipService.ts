@@ -76,6 +76,18 @@ export class AfipService {
 
   private loadCerts(): void {
     try {
+      // Prioridad 1: variables de entorno con el PEM completo (Vercel / CI)
+      // Los saltos de línea vienen como \n literal desde Vercel → los normalizamos
+      const certEnv = process.env.AFIP_CERT_PEM?.replace(/\\n/g, "\n").trim();
+      const keyEnv  = process.env.AFIP_KEY_PEM?.replace(/\\n/g, "\n").trim();
+
+      if (certEnv && keyEnv) {
+        this.cert = certEnv;
+        this.key  = keyEnv;
+        return;
+      }
+
+      // Prioridad 2: archivos locales (desarrollo)
       const certPath = path.resolve(
         process.env.AFIP_CERT_PATH || "./certs/cert.crt"
       );
@@ -85,7 +97,7 @@ export class AfipService {
 
       if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
         this.cert = fs.readFileSync(certPath, { encoding: "utf8" });
-        this.key = fs.readFileSync(keyPath, { encoding: "utf8" });
+        this.key  = fs.readFileSync(keyPath,  { encoding: "utf8" });
       }
     } catch (err) {
       console.error("❌ Error cargando certificados:", err);
