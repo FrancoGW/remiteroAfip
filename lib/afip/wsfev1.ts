@@ -169,31 +169,80 @@ export async function requestCAE(
     throw new Error(`WSFEv1 FECAESolicitar error: ${msgs}`);
   }
 
-  const det = res?.FeDetResp?.FECAEDetResponse;
-  if (!det) {
+  const detRaw = res?.FeDetResp?.FECAEDetResponse;
+  if (!detRaw) {
     throw new Error("WSFEv1: respuesta de detalle vacía");
   }
 
+  // AFIP puede devolver objeto o array según la cantidad de registros
+  const det = Array.isArray(detRaw) ? detRaw[0] : detRaw;
+
   // Verificar resultado del ítem
-  if (det.Resultado !== "A") {
-    const obs = det.Observaciones?.Obs;
+  if (det?.Resultado !== "A") {
+    const obs = det?.Observaciones?.Obs;
     const obsMsg = obs
-      ? (Array.isArray(obs) ? obs.map((o: any) => o.Msg).join(", ") : obs.Msg)
+      ? (Array.isArray(obs)
+          ? obs.map((o: any) => `[${o.Code ?? o.ErrCode}] ${o.Msg}`).join(", ")
+          : `[${obs.Code ?? obs.ErrCode}] ${obs.Msg}`)
       : "sin observaciones";
     throw new Error(
-      `WSFEv1: comprobante rechazado (${det.Resultado}): ${obsMsg}`
+      `WSFEv1: comprobante rechazado (${det?.Resultado}): ${obsMsg}`
     );
   }
 
   // Formatear fecha de vencimiento CAE: YYYYMMDD → YYYY-MM-DD
-  const rawDate: string = String(det.CAEFchVto);
+  const rawDate: string = String(det?.CAEFchVto);
   const caeFchVto = rawDate.length === 8
     ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
     : rawDate;
 
   return {
-    cae: String(det.CAE),
+    cae: String(det?.CAE),
     caeFchVto,
-    cbteDesde: det.CbteDesde,
+    cbteDesde: det?.CbteDesde,
   };
+}
+
+// ─── Diagnóstico: tipos de comprobante habilitados ────────────────────────────
+
+/**
+ * Llama a FEParamGetTiposCbte para ver qué CbteTipos están disponibles
+ * en el ambiente. Útil para diagnosticar errores de "CbteTipo no válido".
+ */
+export async function getTiposCbte(
+  cuitEmisor: number,
+  token: TokenAuth,
+  production: boolean
+): Promise<{ id: number; desc: string }[]> {
+  const client = await getClient(production);
+  const [result] = await client.FEParamGetTiposCbteAsync({
+    Auth: buildAuth(cuitEmisor, token),
+  });
+  const items =
+    result?.FEParamGetTiposCbteResult?.ResultGet?.CbteTipo ?? [];
+  const arr = Array.isArray(items) ? items : [items];
+  return arr.map((t: any) => ({ id: Number(t.Id), desc: String(t.Desc) }));
+}
+
+/**
+ * Llama a FEParamGetPtosVenta para ver qué puntos de venta tiene habilitados
+ * el CUIT en este ambiente.
+ */
+export async function getPuntosVenta(
+  cuitEmisor: number,
+  token: TokenAuth,
+  production: boolean
+): Promise<{ nro: number; tipo: string; bloqueado: string }[]> {
+  const client = await getClient(production);
+  const [result] = await client.FEParamGetPtosVentaAsync({
+    Auth: buildAuth(cuitEmisor, token),
+  });
+  const items =
+    result?.FEParamGetPtosVentaResult?.ResultGet?.PtoVenta ?? [];
+  const arr = Array.isArray(items) ? items : [items];
+  return arr.map((p: any) => ({
+    nro: Number(p.Nro),
+    tipo: String(p.EmisionTipo),
+    bloqueado: String(p.Bloqueado),
+  }));
 }

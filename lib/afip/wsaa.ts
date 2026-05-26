@@ -7,7 +7,9 @@
  *  1. Construir el XML LoginTicketRequest (TRA)
  *  2. Firmarlo como PKCS#7 / CMS con la clave privada y el certificado
  *  3. Enviarlo al WSAA via SOAP → recibir Token + Sign
- *  4. Cachear el ticket durante su vigencia (hasta 12 horas)
+ *  4. Cachear el ticket en disco y memoria durante su vigencia (hasta 12 horas)
+ *     El caché en disco sobrevive reinicios del servidor, evitando el error
+ *     "alreadyAuthenticated" cuando AFIP ya tiene un TA vigente.
  *
  * Documentación oficial:
  *  https://www.afip.gob.ar/ws/documentacion/wsaa.asp
@@ -15,6 +17,8 @@
 
 import * as forge from "node-forge";
 import * as soap from "soap";
+import fs from "fs";
+import path from "path";
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
@@ -30,10 +34,57 @@ export interface TokenAuth {
   expiration: Date;
 }
 
-// ─── Cache en memoria (se limpia al reiniciar el proceso) ─────────────────────
+// ─── Cache en memoria ─────────────────────────────────────────────────────────
 // Clave: `${service}:${production ? "prod" : "homo"}`
 
 const tokenCache = new Map<string, TokenAuth>();
+
+// ─── Cache en disco (sobrevive reinicios del servidor) ────────────────────────
+
+const TOKEN_CACHE_DIR = path.resolve(process.cwd(), "certs");
+const TOKEN_CACHE_FILE = path.join(TOKEN_CACHE_DIR, ".token-cache.json");
+
+function readDiskCache(): Record<string, { token: string; sign: string; expiration: string }> {
+  try {
+    if (fs.existsSync(TOKEN_CACHE_FILE)) {
+      const raw = fs.readFileSync(TOKEN_CACHE_FILE, "utf8");
+      return JSON.parse(raw);
+    }
+  } catch {
+    // Si el archivo está corrupto lo ignoramos
+  }
+  return {};
+}
+
+function writeDiskCache(
+  key: string,
+  auth: TokenAuth
+): void {
+  try {
+    const all = readDiskCache();
+    all[key] = {
+      token: auth.token,
+      sign: auth.sign,
+      expiration: auth.expiration.toISOString(),
+    };
+    fs.writeFileSync(TOKEN_CACHE_FILE, JSON.stringify(all, null, 2), "utf8");
+  } catch {
+    // No bloquear si no se puede escribir
+  }
+}
+
+function getFromDiskCache(key: string): TokenAuth | null {
+  try {
+    const all = readDiskCache();
+    const entry = all[key];
+    if (!entry) return null;
+    const expiration = new Date(entry.expiration);
+    if (expiration <= new Date(Date.now() + 5 * 60 * 1000)) return null;
+    return { token: entry.token, sign: entry.sign, expiration };
+  } catch {
+    return null;
+  }
+}
 
 // ─── Cliente SOAP (se reutiliza para evitar refetch del WSDL) ─────────────────
 
@@ -144,19 +195,43 @@ export async function getServiceToken(
 ): Promise<TokenAuth> {
   const cacheKey = `${service}:${production ? "prod" : "homo"}`;
 
-  // Usar ticket cacheado si todavía es válido (con 5 min de margen)
+  // 1. Cache en memoria
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiration > new Date(Date.now() + 5 * 60 * 1000)) {
     return cached;
   }
 
-  // Construir y firmar el TRA
+  // 2. Cache en disco (sobrevive reinicios — evita "alreadyAuthenticated")
+  const diskCached = getFromDiskCache(cacheKey);
+  if (diskCached) {
+    tokenCache.set(cacheKey, diskCached);
+    console.log(`🔑 Token WSAA recuperado de caché en disco (expira: ${diskCached.expiration.toISOString()})`);
+    return diskCached;
+  }
+
+  // 3. Pedir token nuevo a AFIP
   const tra = buildTRA(service);
   const cmsSigned = signTRA(tra, certPem, keyPem);
 
-  // Llamar al WSAA
   const client = await getSoapClient(production);
-  const [result] = await client.loginCmsAsync({ in0: cmsSigned });
+
+  let result: any;
+  try {
+    [result] = await client.loginCmsAsync({ in0: cmsSigned });
+  } catch (soapErr: any) {
+    const msg: string = soapErr?.message || soapErr?.toString() || "";
+    // Si AFIP dice que ya hay un TA válido pero no lo tenemos cacheado,
+    // no podemos recuperarlo — informamos con instrucciones claras.
+    if (msg.includes("alreadyAuthenticated")) {
+      throw new Error(
+        "WSAA: AFIP indica que ya existe un Token activo para este certificado, " +
+        "pero el servidor no lo tiene en caché. " +
+        "Esperá a que expire (~12 hs desde la última autenticación exitosa) o reiniciá el token " +
+        "revocando y re-autorizando el certificado en WSASS."
+      );
+    }
+    throw soapErr;
+  }
 
   if (!result || !result.loginCmsReturn) {
     throw new Error("WSAA: respuesta vacía o inválida");
@@ -164,7 +239,10 @@ export async function getServiceToken(
 
   const auth = parseLoginResponse(result.loginCmsReturn);
 
-  // Cachear y retornar
+  // Guardar en memoria y en disco
   tokenCache.set(cacheKey, auth);
+  writeDiskCache(cacheKey, auth);
+  console.log(`🔑 Token WSAA obtenido y cacheado (expira: ${auth.expiration.toISOString()})`);
+
   return auth;
 }

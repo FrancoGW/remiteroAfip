@@ -1,23 +1,45 @@
 #!/bin/bash
-
-# Script para generar un remito de ejemplo con 43 toneladas
+# Ejemplo: crear remito vía API propia (POST /api/remitos).
+# Requiere el servidor: pnpm dev (u otro) en http://localhost:3000
 # Uso: bash scripts/probar-remito-ejemplo.sh
 
-echo "📦 Generando remito de ejemplo con 43 toneladas..."
+set -e
+BASE="${BASE_URL:-http://localhost:3000}"
+
+echo "📦 POST $BASE/api/remitos (ejemplo mínimo, transporte propio)..."
 echo ""
 
-# Hacer la petición POST al endpoint
-curl -X POST http://localhost:3000/api/tusfacturas/generar-remito-ejemplo \
+curl -sS -X POST "$BASE/api/remitos" \
   -H "Content-Type: application/json" \
   -d '{
-    "toneladas": 43,
-    "producto": "Aserrable",
-    "especie": "Pino",
-    "categoria": "Super Grueso"
-  }' \
-  | jq '.'
+    "puntoVenta": 1,
+    "fechaEmision": "2026-04-24",
+    "codigoTipoRemito": 1,
+    "cuitEmisor": "30693787285",
+    "cuitReceptor": "30567890123",
+    "nombreReceptor": "Cliente de prueba S.A.",
+    "domicilioReceptor": "Av. Ejemplo 1234",
+    "condicionIva": "RESPONSABLE INSCRIPTO",
+    "tipoTransporte": 1,
+    "origenDomicilio": "Ruta 12 Km 100",
+    "origenLocalidad": "La Cruz",
+    "origenProvincia": "Corrientes",
+    "origenCodigoPostal": "3346",
+    "destinoDomicilio": "Zona industrial",
+    "destinoLocalidad": "Goya",
+    "destinoProvincia": "Corrientes",
+    "destinoCodigoPostal": "3450",
+    "items": [
+      {
+        "codigo": "001",
+        "descripcion": "Aserrable Pino",
+        "cantidad": 10,
+        "unidadMedida": "M3",
+        "especie": "Pino",
+        "categoria": "Super Grueso"
+      }
+    ]
+  }' | jq '.'
 
 echo ""
-echo "✅ Remito generado (si todo salió bien)"
-
-
+echo "✅ Listo (revisá success y errores en la respuesta JSON)"

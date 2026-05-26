@@ -19,8 +19,9 @@ import {
   requestCAE,
   VoucherData,
 } from "./wsfev1";
+import { getEmisorCuitDigitos } from "../config/empresa";
 
-// ─── Servicio de AFIP para facturación electrónica ───────────────────────────
+// ─── Servicio WSFEv1 AFIP / ARCA (remitos u otros CBTE configurados) ─────────
 const AFIP_SERVICE = "wsfe";
 
 // ─── Mapeo condición IVA texto → id AFIP ─────────────────────────────────────
@@ -44,8 +45,8 @@ export class AfipService {
   private puntoVenta: number;
 
   constructor() {
-    const cuitStr = process.env.AFIP_CUIT || "20409378472";
-    this.cuit = parseInt(cuitStr.replace(/-/g, ""), 10);
+    const cuitStr = getEmisorCuitDigitos();
+    this.cuit = parseInt(cuitStr, 10);
     this.production = process.env.AFIP_PRODUCTION === "true";
     this.puntoVenta = parseInt(process.env.AFIP_PUNTO_VENTA || "1", 10);
 

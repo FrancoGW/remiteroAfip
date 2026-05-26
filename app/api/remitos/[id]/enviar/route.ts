@@ -12,6 +12,7 @@ import { getPdfUrlForTwilio } from "@/lib/send/twilioPdfUrl";
  * Body (JSON):
  *   whatsapp?: string[]  — números (ej: ["5491112345678"])
  *   email?: string[]     — direcciones de email
+ *   nombre?: string     — opcional, para plantilla WhatsApp {{1}} (default: nombre del receptor del remito)
  *
  * Al menos uno de los dos debe enviarse.
  */
@@ -35,6 +36,10 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const whatsapp: string[] = Array.isArray(body.whatsapp) ? body.whatsapp : [];
     const email: string[] = Array.isArray(body.email) ? body.email : [];
+    const nombreWhatsapp =
+      typeof body.nombre === "string" && body.nombre.trim()
+        ? body.nombre.trim()
+        : remito.nombreReceptor?.trim() || "Cliente";
 
     if (whatsapp.length === 0 && email.length === 0) {
       const res = NextResponse.json(
@@ -85,7 +90,12 @@ export async function POST(
         });
         continue;
       }
-      const r = await enviarRemitoPorWhatsApp(n, pdfUrlParaTwilio, numeroRemito);
+      const r = await enviarRemitoPorWhatsApp(
+        n,
+        pdfUrlParaTwilio,
+        numeroRemito,
+        nombreWhatsapp
+      );
       resultadosWhatsApp.push({ numero: n, success: r.success, error: r.error });
       if (!r.success && r.error) errores.push(`WhatsApp ${n}: ${r.error}`);
     }

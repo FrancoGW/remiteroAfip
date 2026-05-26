@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Minus, Send, Loader2, Download, FileText } from "lucide-react";
 import { Remito, RemitoItem, TIPOS_REMITO, TIPOS_TRANSPORTE, UNIDADES_MEDIDA, PROVINCIAS_ARGENTINA } from "@/lib/types/remito";
+import { CUIT_EMISOR_PRINCIPAL } from "@/lib/config/cuitEmpresa";
 
 export default function RemitoForm() {
   const [loading, setLoading] = useState(false);
@@ -13,7 +14,7 @@ export default function RemitoForm() {
     puntoVenta: 1,
     fechaEmision: new Date().toISOString().split("T")[0],
     codigoTipoRemito: 1,
-    cuitEmisor: "30693787285", // Precargado
+    cuitEmisor: CUIT_EMISOR_PRINCIPAL,
     cuitReceptor: "",
     nombreReceptor: "",
     domicilioReceptor: "",
@@ -124,7 +125,7 @@ export default function RemitoForm() {
       puntoVenta: 13,
       fechaEmision: new Date().toISOString().split("T")[0],
       codigoTipoRemito: 1,
-      cuitEmisor: "30693787285",
+      cuitEmisor: CUIT_EMISOR_PRINCIPAL,
       cuitReceptor: "30567890123",
       nombreReceptor: "FEPAL S.A.",
       domicilioReceptor: "Av. Libertador 1234",

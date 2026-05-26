@@ -15,8 +15,8 @@
 # 4. Descargar el .crt resultante y guardarlo como certs/cert.crt
 # 5. Asociar el certificado al servicio WSFEv1 en AFIP (comprobante tipo 91 = Remito R)
 
-# CUIT de la empresa emisora (sin guiones, 11 dígitos)
-AFIP_CUIT=30XXXXXXXXX
+# CUIT de la empresa emisora (sin guiones, 11 dígitos); debe coincidir con el certificado ARCA
+AFIP_CUIT=30693787285
 
 # Rutas a los archivos de certificado (generados con OpenSSL + portal AFIP)
 AFIP_CERT_PATH=./certs/cert.crt
@@ -28,28 +28,6 @@ AFIP_PRODUCTION=false
 # Número de punto de venta habilitado en AFIP para este sistema
 # Configurar en: portal AFIP > Mis Datos > Puntos de Venta
 AFIP_PUNTO_VENTA=1
-
-# =============================================
-# TusFacturas.app (facturación complementaria)
-# =============================================
-# Documentación: https://www.tusfacturas.app/app/api
-
-# API Key
-TUSFACTURAS_API_KEY=tu_api_key_aqui
-
-# API Token
-TUSFACTURAS_API_TOKEN=tu_api_token_aqui
-
-# User Token
-TUSFACTURAS_USER_TOKEN=tu_user_token_aqui
-
-# Webhook Token (para validar notificaciones)
-TUSFACTURAS_WEBHOOK_TOKEN=tu_webhook_token_aqui
-
-# Base URL de la API
-TUSFACTURAS_BASE_URL=https://www.tusfacturas.app/app/api/v2
-
-# Requerimientos mínimos: TLS 1.2+
 
 # =============================================
 # Base de datos
