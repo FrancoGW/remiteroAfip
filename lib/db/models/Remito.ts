@@ -29,8 +29,8 @@ const RemitoItemSchema = new Schema<RemitoItemDocument>({
 const RemitoSchema = new Schema<RemitoDocument>(
   {
     id: { type: String, unique: true, index: true },
-    cae: { type: String },
-    vencimientoCae: { type: String },
+    cai: { type: String },
+    vencimientoCai: { type: String },
     numeroRemito: { type: Number, index: true },
     puntoVenta: { type: Number, required: true },
     fechaEmision: { type: String, required: true },

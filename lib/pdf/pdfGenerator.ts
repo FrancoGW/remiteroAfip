@@ -618,17 +618,33 @@ export class PDFGenerator {
           .text("OBSERVACIONES:", 55, obsY + 5)
           .text(remito.observaciones || "", 55, obsY + 18, { width: pageWidth - 10 });
 
-        // ===== CAE Y DATOS ADICIONALES =====
-        if (remito.cae) {
-          const caeY = obsY + obsHeight + 10;
+        // ===== CAI =====
+        // Los remitos R (91) se autorizan con CAI (rango de numeración con
+        // vencimiento único para todo el lote), nunca con CAE. Se muestra en
+        // un recuadro propio, con el mismo peso visual que el resto de las
+        // secciones del comprobante (no como un dato secundario).
+        if (remito.cai) {
+          const caiY = obsY + obsHeight + 5;
+          const caiHeight = 30;
+
           doc
-            .fontSize(8)
+            .strokeColor(colorNegro)
+            .lineWidth(0.5)
+            .rect(50, caiY, pageWidth, caiHeight)
+            .stroke();
+
+          doc
+            .font("Helvetica-Bold")
+            .fontSize(11)
             .fillColor(colorNegro)
-            .text(`CAE: ${remito.cae}`, 50, caeY);
-          
-          if (remito.vencimientoCae) {
-            doc.text(`Vencimiento CAE: ${this.formatearFecha(remito.vencimientoCae)}`, 300, caeY);
-          }
+            .text(`CAI N°: ${remito.cai}`, 55, caiY + 9, { width: pageWidth / 2 })
+            .text(
+              `VENCIMIENTO CAI: ${remito.vencimientoCai ? this.formatearFecha(remito.vencimientoCai) : "-"}`,
+              50 + pageWidth / 2,
+              caiY + 9,
+              { width: pageWidth / 2 - 5, align: "right" }
+            )
+            .font("Helvetica");
         }
 
         // Pie de página

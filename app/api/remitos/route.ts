@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PDFService } from "@/lib/pdf/pdfService";
 import { Remito } from "@/lib/types/remito";
 import { remitosStorageService } from "@/lib/storage/remitosStorage";
-import { afipService } from "@/lib/afip/afipService";
+import { obtenerProximoNumeroRemito } from "@/lib/cai/numeracion";
 
 
 /**
@@ -78,7 +78,7 @@ export async function OPTIONS(request: NextRequest) {
  * - destinoCodigoPostal: string
  * - items: Array con al menos un item
  * 
- * @returns JSON con success, cae, vencimientoCae, numeroRemito, remito y pdfBase64
+ * @returns JSON con success, cai, vencimientoCai, numeroRemito, remito y pdfBase64
  */
 export async function POST(request: NextRequest) {
   try {
@@ -188,16 +188,18 @@ export async function POST(request: NextRequest) {
 
     const fechaCreacion = new Date().toISOString();
 
-    // Solicitar CAE a AFIP (o simulación si no hay certificados configurados)
-    const afipResp = await afipService.generarRemito(remito);
-
-    if (!afipResp.success) {
+    // Asignar el próximo número disponible dentro del CAI vigente para el
+    // punto de venta solicitado (los remitos R ya no se autorizan vía WSFEv1/CAE).
+    let numeroAsignado;
+    try {
+      numeroAsignado = await obtenerProximoNumeroRemito(remito.puntoVenta);
+    } catch (error: any) {
       const response = NextResponse.json(
         {
           success: false,
-          errores: afipResp.errores || ["Error al obtener autorización de AFIP"],
+          errores: [error.message || "No hay CAI vigente con numeración disponible."],
         },
-        { status: 502 }
+        { status: 400 }
       );
       response.headers.set("Access-Control-Allow-Origin", "*");
       response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -205,13 +207,13 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    // Crear remito completo con los datos autorizados por AFIP
+    // Crear remito completo con el número y CAI asignados
     const nuevoRemito: Remito = {
       ...remito,
       id: Date.now().toString(),
-      numeroRemito: afipResp.numeroRemito,
-      cae: afipResp.cae,
-      vencimientoCae: afipResp.vencimientoCae,
+      numeroRemito: numeroAsignado.numero,
+      cai: numeroAsignado.cai,
+      vencimientoCai: numeroAsignado.vencimientoCai.toISOString().split("T")[0],
       estado: "approved",
       fechaCreacion: fechaCreacion,
     };
@@ -261,8 +263,8 @@ export async function POST(request: NextRequest) {
     // Respuesta JSON: con pdfBase64 si se generó, o null y mensaje si no
     const response = NextResponse.json({
       success: true,
-      cae: nuevoRemito.cae,
-      vencimientoCae: nuevoRemito.vencimientoCae,
+      cai: nuevoRemito.cai,
+      vencimientoCai: nuevoRemito.vencimientoCai,
       numeroRemito: nuevoRemito.numeroRemito,
       remito: nuevoRemito,
       pdfBase64: pdfBuffer ? pdfBuffer.toString("base64") : null,

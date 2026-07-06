@@ -192,7 +192,7 @@ export default function RemitoForm() {
       if (data.success) {
         setMessage({
           type: "success",
-          text: `¡Remito generado exitosamente! CAE: ${data.cae} - Nro: ${data.numeroRemito}`,
+          text: `¡Remito generado exitosamente! CAI: ${data.cai} - Nro: ${data.numeroRemito}`,
         });
         
         // Guardar información del remito generado para descargar PDF

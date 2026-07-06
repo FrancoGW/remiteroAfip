@@ -141,14 +141,14 @@ export default function RemitoList() {
                     {getEstadoText(remito.estado)}
                   </span>
                 </div>
-                {remito.cae && (
+                {remito.cai && (
                   <p className="text-sm text-gray-600 mb-1">
-                    <strong>CAE:</strong> {remito.cae}
+                    <strong>CAI:</strong> {remito.cai}
                   </p>
                 )}
-                {remito.vencimientoCae && (
+                {remito.vencimientoCai && (
                   <p className="text-sm text-gray-600">
-                    <strong>Vencimiento CAE:</strong> {remito.vencimientoCae}
+                    <strong>Vencimiento CAI:</strong> {remito.vencimientoCai}
                   </p>
                 )}
               </div>
@@ -224,8 +224,8 @@ export default function RemitoList() {
                 <h2 className="text-2xl font-bold text-gray-800">
                   Remito #{selectedRemito.numeroRemito}
                 </h2>
-                {selectedRemito.cae && (
-                  <p className="text-gray-600 mt-1">CAE: {selectedRemito.cae}</p>
+                {selectedRemito.cai && (
+                  <p className="text-gray-600 mt-1">CAI: {selectedRemito.cai}</p>
                 )}
               </div>
               <button
@@ -247,10 +247,10 @@ export default function RemitoList() {
                   <p>
                     <strong>Punto de Venta:</strong> {selectedRemito.puntoVenta}
                   </p>
-                  {selectedRemito.vencimientoCae && (
+                  {selectedRemito.vencimientoCai && (
                     <p>
-                      <strong>Vencimiento CAE:</strong>{" "}
-                      {selectedRemito.vencimientoCae}
+                      <strong>Vencimiento CAI:</strong>{" "}
+                      {selectedRemito.vencimientoCai}
                     </p>
                   )}
                 </div>

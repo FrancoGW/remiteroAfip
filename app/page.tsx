@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, CheckCircle, AlertCircle, Info, LogOut } from "lucide-react";
+import Link from "next/link";
+import { FileText, CheckCircle, AlertCircle, Info, LogOut, ShieldCheck } from "lucide-react";
 import RemitoForm from "@/components/RemitoForm";
 import RemitoList from "@/components/RemitoList";
 
@@ -79,6 +80,13 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <Link
+                  href="/cai"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors"
+                >
+                  <ShieldCheck size={18} />
+                  <span className="hidden md:inline text-sm font-medium">Gestión de CAI</span>
+                </Link>
                 <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
                   <Info size={18} className="text-blue-600" />
                   <span className="text-sm text-blue-900 font-medium">Modo Desarrollo</span>

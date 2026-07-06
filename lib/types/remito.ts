@@ -1,7 +1,7 @@
 export interface Remito {
   id?: string;
-  cae?: string;
-  vencimientoCae?: string;
+  cai?: string;
+  vencimientoCai?: string;
   numeroRemito?: number;
   puntoVenta: number;
   fechaEmision: string;
