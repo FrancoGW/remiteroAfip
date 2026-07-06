@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Loader2, PlayCircle, AlertTriangle } from "lucide-react";
-import PanelShell from "@/components/layout/PanelShell";
 
 interface EndpointCardProps {
   titulo: string;
@@ -56,45 +55,40 @@ function EndpointCard({ titulo, descripcion, path }: EndpointCardProps) {
 
 export default function DiagnosticoPage() {
   return (
-    <PanelShell
-      title="Diagnóstico AFIP"
-      subtitle="Endpoints técnicos de referencia — no son de uso diario"
-    >
-      <div className="space-y-4">
-        <EndpointCard
-          titulo="Check Auth (WSAA)"
-          descripcion="Verifica qué servicios están autorizados con el certificado configurado."
-          path="/api/afip/check-auth"
-        />
-        <EndpointCard
-          titulo="Diagnóstico"
-          descripcion="Estado de certificados, CUIT y modo (producción/homologación)."
-          path="/api/afip/diagnostico"
-        />
+    <div className="space-y-4">
+      <EndpointCard
+        titulo="Check Auth (WSAA)"
+        descripcion="Verifica qué servicios están autorizados con el certificado configurado."
+        path="/api/afip/check-auth"
+      />
+      <EndpointCard
+        titulo="Diagnóstico"
+        descripcion="Estado de certificados, CUIT y modo (producción/homologación)."
+        path="/api/afip/diagnostico"
+      />
 
-        <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-            <div>
-              <h3 className="font-semibold text-gray-900">Test Producción (Remito R real)</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Este endpoint <strong>emite un remito R real en AFIP PRODUCCIÓN</strong> (Punto de
-                Venta 17 por defecto). No tiene un botón de ejecución acá a propósito: no es una
-                acción de prueba, consume numeración fiscal real. Ejecutarlo únicamente por curl,
-                de forma consciente:
-              </p>
-              <pre className="mt-3 bg-gray-900 text-gray-100 text-xs p-4 rounded-lg overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+          <div>
+            <h3 className="font-semibold text-gray-900">Test Producción (Remito R real)</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Este endpoint <strong>emite un remito R real en AFIP PRODUCCIÓN</strong> (Punto de
+              Venta 17 por defecto). No tiene un botón de ejecución acá a propósito: no es una
+              acción de prueba, consume numeración fiscal real. Ejecutarlo únicamente por curl,
+              de forma consciente:
+            </p>
+            <pre className="mt-3 bg-gray-900 text-gray-100 text-xs p-4 rounded-lg overflow-x-auto">
 {`curl -X POST https://<tu-dominio>/api/afip/test-produccion \\
   -H "Content-Type: application/json" \\
   -d '{"cuitReceptor": "30567890123", "puntoVenta": 17}'`}
-              </pre>
-              <p className="text-xs text-gray-400 mt-2">
-                Requiere AFIP_PRODUCTION=true configurado en el entorno.
-              </p>
-            </div>
+            </pre>
+            <p className="text-xs text-gray-400 mt-2">
+              Requiere AFIP_PRODUCTION=true configurado en el entorno.
+            </p>
           </div>
         </div>
       </div>
-    </PanelShell>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Minus, Send, Loader2, Download, FileText, FlaskConical } from "lucide-react";
 import { Remito, RemitoItem, TIPOS_REMITO, TIPOS_TRANSPORTE, UNIDADES_MEDIDA, PROVINCIAS_ARGENTINA } from "@/lib/types/remito";
 import { CUIT_EMISOR_PRINCIPAL } from "@/lib/config/cuitEmpresa";
+import EnviarPruebaRapida from "./EnviarPruebaRapida";
 
 interface RemitoFormProps {
   /** Si es true, el remito se crea con esPrueba=true: no consume CAI real y el PDF lleva marca de agua. */
@@ -304,6 +305,9 @@ export default function RemitoForm({ modoPrueba = false }: RemitoFormProps) {
               </button>
             )}
           </div>
+          {message.type === "success" && modoPrueba && remitoGenerado && (
+            <EnviarPruebaRapida remitoId={remitoGenerado.id} />
+          )}
         </div>
       )}
 

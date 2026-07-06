@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Upload, FileEdit } from "lucide-react";
-import PanelShell from "@/components/layout/PanelShell";
 import CaiForm, { datosVacios } from "@/components/CaiForm";
 import CaiPdfUpload from "@/components/CaiPdfUpload";
 
@@ -10,7 +9,7 @@ export default function NuevoCaiPage() {
   const [modo, setModo] = useState<"pdf" | "manual">("pdf");
 
   return (
-    <PanelShell title="Nuevo CAI" subtitle="Cargá la constancia de AFIP en PDF o completá los datos manualmente">
+    <>
       <div className="mb-6">
         <div className="border-b border-gray-200 bg-white rounded-t-xl shadow-sm">
           <nav className="flex -mb-px">
@@ -47,6 +46,6 @@ export default function NuevoCaiPage() {
       <div className="bg-white rounded-b-xl shadow-sm border border-gray-100 p-8">
         {modo === "pdf" ? <CaiPdfUpload /> : <CaiForm initialData={datosVacios()} />}
       </div>
-    </PanelShell>
+    </>
   );
 }

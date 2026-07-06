@@ -7,12 +7,22 @@ import RemitoModel, { RemitoDocument } from "../db/models/Remito";
  */
 export const remitosStorageService = {
   /**
-   * Obtiene todos los remitos ordenados por más recientes
+   * Obtiene todos los remitos ordenados por más recientes.
+   * `filtro.esPrueba` permite pedir sólo remitos reales (false) o sólo de
+   * prueba (true); sin filtro trae ambos.
    */
-  async getAll(): Promise<Remito[]> {
+  async getAll(filtro?: { esPrueba?: boolean }): Promise<Remito[]> {
     try {
       await connectDB();
-      const remitos = await RemitoModel.find({})
+      const query: Record<string, unknown> = {};
+      if (filtro?.esPrueba === true) {
+        query.esPrueba = true;
+      } else if (filtro?.esPrueba === false) {
+        // Los remitos históricos no tienen el campo esPrueba seteado: también son reales.
+        query.esPrueba = { $ne: true };
+      }
+
+      const remitos = await RemitoModel.find(query)
         .sort({ createdAt: -1 })
         .lean();
       

@@ -5,11 +5,13 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface AppConfigDocument extends Omit<Document, "_id"> {
   _id: string;
   whatsappTestNumber?: string;
+  emailTestAddress?: string;
 }
 
 const AppConfigSchema = new Schema<AppConfigDocument>({
   _id: { type: String },
   whatsappTestNumber: { type: String },
+  emailTestAddress: { type: String },
 });
 
 const AppConfigModel =

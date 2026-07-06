@@ -5,7 +5,12 @@ import { FileText, Calendar, User, Truck, MapPin, Download, Eye } from "lucide-r
 import { Remito } from "@/lib/types/remito";
 import EnviarRemito from "./EnviarRemito";
 
-export default function RemitoList() {
+interface RemitoListProps {
+  /** false: sólo remitos reales (default, usado en /remitos). true: sólo remitos de prueba (usado en /remitos/prueba). */
+  esPrueba?: boolean;
+}
+
+export default function RemitoList({ esPrueba = false }: RemitoListProps) {
   const [remitos, setRemitos] = useState<Remito[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRemito, setSelectedRemito] = useState<Remito | null>(null);
@@ -13,11 +18,13 @@ export default function RemitoList() {
 
   useEffect(() => {
     loadRemitos();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esPrueba]);
 
   const loadRemitos = async () => {
+    setLoading(true);
     try {
-      const response = await fetch("/api/remitos");
+      const response = await fetch(`/api/remitos?esPrueba=${esPrueba}`);
       const data = await response.json();
       setRemitos(data.remitos || []);
     } catch (error) {

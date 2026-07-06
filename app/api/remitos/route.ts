@@ -8,12 +8,17 @@ import { obtenerProximoNumeroPrueba, CAI_PLACEHOLDER_PRUEBA } from "@/lib/cai/pr
 
 /**
  * GET /api/remitos
- * Obtiene la lista de remitos
+ * Obtiene la lista de remitos.
+ * @query esPrueba=true|false — filtra sólo remitos de prueba o sólo reales; sin el parámetro trae ambos.
  */
 export async function GET(request: NextRequest) {
   try {
-    const remitos = await remitosStorageService.getAll();
-    
+    const esPruebaParam = request.nextUrl.searchParams.get("esPrueba");
+    const filtro =
+      esPruebaParam === "true" ? { esPrueba: true } : esPruebaParam === "false" ? { esPrueba: false } : undefined;
+
+    const remitos = await remitosStorageService.getAll(filtro);
+
     const response = NextResponse.json({
       success: true,
       remitos: remitos,

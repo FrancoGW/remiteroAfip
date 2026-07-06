@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import PanelShell from "@/components/layout/PanelShell";
 import CaiList from "@/components/CaiList";
 
 export default function CaiPage() {
   return (
-    <PanelShell title="CAI" subtitle="Códigos de Autorización de Impresión y numeración de remitos">
+    <>
       <div className="flex justify-end mb-4">
         <Link
           href="/cai/nuevo"
@@ -21,6 +20,6 @@ export default function CaiPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
         <CaiList />
       </div>
-    </PanelShell>
+    </>
   );
 }

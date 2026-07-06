@@ -27,6 +27,26 @@ export async function setWhatsappTestNumber(numero: string): Promise<string> {
   return limpio;
 }
 
+/**
+ * Dirección de email de pruebas: simétrico a getWhatsappTestNumber. Puede
+ * cargarse desde el panel (Mongo, prioridad) o quedar fijo por variable de
+ * entorno EMAIL_TEST_ADDRESS.
+ */
+export async function getEmailTestAddress(): Promise<string | null> {
+  await connectDB();
+  const doc = await AppConfigModel.findById(CONFIG_ID).lean();
+  const guardado = (doc as any)?.emailTestAddress?.trim();
+  if (guardado) return guardado;
+  return process.env.EMAIL_TEST_ADDRESS?.trim() || null;
+}
+
+export async function setEmailTestAddress(email: string): Promise<string> {
+  await connectDB();
+  const limpio = email.trim();
+  await AppConfigModel.findByIdAndUpdate(CONFIG_ID, { emailTestAddress: limpio }, { upsert: true });
+  return limpio;
+}
+
 export interface EstadoIntegraciones {
   whatsapp: { configurado: boolean };
   email: { configurado: boolean };

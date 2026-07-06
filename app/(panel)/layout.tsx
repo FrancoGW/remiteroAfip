@@ -1,18 +1,36 @@
 "use client";
 
 import { useState, useEffect, ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, LogOut } from "lucide-react";
-import Sidebar from "./Sidebar";
+import Sidebar from "@/components/layout/Sidebar";
 
-interface PanelShellProps {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-}
+/**
+ * Título/subtítulo del header por ruta. Vive acá (y no en cada page) porque
+ * este layout es compartido por todas las secciones del panel: Next.js lo
+ * mantiene montado entre navegaciones (no se desmonta el Sidebar ni se
+ * vuelve a pedir /api/auth/check en cada click), así la navegación entre
+ * secciones no parpadea.
+ */
+const TITULOS: Record<string, { title: string; subtitle?: string }> = {
+  "/": { title: "Dashboard", subtitle: "Resumen de actividad del panel" },
+  "/remitos": { title: "Remitos", subtitle: "Generación y listado de remitos electrónicos" },
+  "/remitos/prueba": {
+    title: "Remito de Prueba",
+    subtitle: "Remitos ficticios para probar el circuito de envío sin gastar numeración de CAI",
+  },
+  "/cai": { title: "CAI", subtitle: "Códigos de Autorización de Impresión y numeración de remitos" },
+  "/cai/nuevo": {
+    title: "Nuevo CAI",
+    subtitle: "Cargá la constancia de AFIP en PDF o completá los datos manualmente",
+  },
+  "/diagnostico": { title: "Diagnóstico AFIP", subtitle: "Endpoints técnicos de referencia — no son de uso diario" },
+  "/configuracion": { title: "Configuración", subtitle: "Estado de integraciones y variables editables del panel" },
+};
 
-export default function PanelShell({ title, subtitle, children }: PanelShellProps) {
+export default function PanelLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [authenticated, setAuthenticated] = useState(false);
   const [username, setUsername] = useState("");
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -20,6 +38,7 @@ export default function PanelShell({ title, subtitle, children }: PanelShellProp
 
   useEffect(() => {
     checkAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkAuth = async () => {
@@ -65,6 +84,8 @@ export default function PanelShell({ title, subtitle, children }: PanelShellProp
     return null;
   }
 
+  const info = TITULOS[pathname] || { title: "Remitero AFIP" };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -80,8 +101,8 @@ export default function PanelShell({ title, subtitle, children }: PanelShellProp
               <Menu size={22} />
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">{title}</h1>
-              {subtitle && <p className="text-sm text-gray-600 truncate">{subtitle}</p>}
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">{info.title}</h1>
+              {info.subtitle && <p className="text-sm text-gray-600 truncate">{info.subtitle}</p>}
             </div>
           </div>
 

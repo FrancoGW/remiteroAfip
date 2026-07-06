@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import PanelShell from "@/components/layout/PanelShell";
 import RemitosSeriesChart from "@/components/dashboard/RemitosSeriesChart";
 import ClientesRecurrentes from "@/components/dashboard/ClientesRecurrentes";
 import CaiDisponibilidad from "@/components/dashboard/CaiDisponibilidad";
@@ -17,7 +16,7 @@ export default function DashboardPage() {
   const [incluirPrueba, setIncluirPrueba] = useState(false);
 
   return (
-    <PanelShell title="Dashboard" subtitle="Resumen de actividad del panel">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex gap-2">
           {RANGOS.map((r) => (
@@ -61,6 +60,6 @@ export default function DashboardPage() {
           <ClientesRecurrentes dias={dias} incluirPrueba={incluirPrueba} />
         </div>
       </div>
-    </PanelShell>
+    </>
   );
 }

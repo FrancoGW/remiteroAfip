@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, Save, Loader2 } from "lucide-react";
-import PanelShell from "@/components/layout/PanelShell";
 
 interface ConfigData {
   isProduction: boolean;
   whatsappTestNumber: string | null;
+  emailTestAddress: string | null;
   integraciones: {
     whatsapp: { configurado: boolean };
     email: { configurado: boolean };
@@ -30,6 +30,7 @@ export default function ConfiguracionPage() {
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [testNumeroInput, setTestNumeroInput] = useState("");
+  const [testEmailInput, setTestEmailInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export default function ConfiguracionPage() {
       if (data.success) {
         setConfig(data);
         setTestNumeroInput(data.whatsappTestNumber || "");
+        setTestEmailInput(data.emailTestAddress || "");
       }
     } finally {
       setLoading(false);
@@ -51,19 +53,22 @@ export default function ConfiguracionPage() {
     cargar();
   }, []);
 
-  const guardarTestNumero = async () => {
-    if (!testNumeroInput.trim()) return;
+  const guardar = async () => {
     setSaving(true);
     setMensaje(null);
     try {
+      const body: Record<string, string> = {};
+      if (testNumeroInput.trim()) body.whatsappTestNumber = testNumeroInput.trim();
+      if (testEmailInput.trim()) body.emailTestAddress = testEmailInput.trim();
+
       const res = await fetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ whatsappTestNumber: testNumeroInput.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
-        setMensaje("Número de pruebas actualizado.");
+        setMensaje("Contactos de prueba actualizados.");
         cargar();
       } else {
         setMensaje(data.error || "No se pudo guardar");
@@ -74,7 +79,7 @@ export default function ConfiguracionPage() {
   };
 
   return (
-    <PanelShell title="Configuración" subtitle="Estado de integraciones y variables editables del panel">
+    <>
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
@@ -124,36 +129,62 @@ export default function ConfiguracionPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold text-gray-900 mb-1">Número de WhatsApp de pruebas</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">Contactos de prueba</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Destino por defecto del botón &quot;🧪 Enviar prueba&quot; en el detalle de un remito.
-              Nunca se usa el número real del cliente salvo que lo tipees a mano en ese momento.
+              Destinos por defecto de los botones de prueba (detalle de un remito y &quot;Remito de
+              Prueba&quot;). Nunca se usa el número/email real del cliente salvo que lo tipees a
+              mano en ese momento.
             </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={testNumeroInput}
-                onChange={(e) => setTestNumeroInput(e.target.value)}
-                placeholder="5491112345678"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Número de WhatsApp de pruebas
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={testNumeroInput}
+                    onChange={(e) => setTestNumeroInput(e.target.value)}
+                    placeholder="5491112345678"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  También puede fijarse por WHATSAPP_TEST_NUMBER; lo guardado acá tiene prioridad.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Email de pruebas
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={testEmailInput}
+                    onChange={(e) => setTestEmailInput(e.target.value)}
+                    placeholder="pruebas@ejemplo.com"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  También puede fijarse por EMAIL_TEST_ADDRESS; lo guardado acá tiene prioridad.
+                </p>
+              </div>
+
               <button
-                onClick={guardarTestNumero}
-                disabled={saving || !testNumeroInput.trim()}
+                onClick={guardar}
+                disabled={saving || (!testNumeroInput.trim() && !testEmailInput.trim())}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-300 text-sm"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Guardar
               </button>
+              {mensaje && <p className="text-sm text-gray-600 mt-1">{mensaje}</p>}
             </div>
-            {mensaje && <p className="text-sm text-gray-600 mt-2">{mensaje}</p>}
-            <p className="text-xs text-gray-400 mt-3">
-              También puede fijarse por variable de entorno WHATSAPP_TEST_NUMBER; lo guardado acá
-              tiene prioridad.
-            </p>
           </div>
         </div>
       )}
-    </PanelShell>
+    </>
   );
 }
