@@ -82,6 +82,9 @@ const RemitoSchema = new Schema<RemitoDocument>(
       default: "approved"
     },
     fechaCreacion: { type: String },
+
+    // Remito de prueba: no consume CAI real, numeración ficticia independiente
+    esPrueba: { type: Boolean, default: false },
   },
   {
     timestamps: true, // Agrega createdAt y updatedAt automáticamente
@@ -93,6 +96,7 @@ RemitoSchema.index({ numeroRemito: 1 });
 RemitoSchema.index({ cuitReceptor: 1 });
 RemitoSchema.index({ fechaEmision: 1 });
 RemitoSchema.index({ createdAt: -1 }); // Para ordenar por más recientes
+RemitoSchema.index({ esPrueba: 1 });
 
 // Evitar que se cree el modelo múltiples veces en desarrollo
 const RemitoModel = mongoose.models.Remito || mongoose.model<RemitoDocument>("Remito", RemitoSchema);

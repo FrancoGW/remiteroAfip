@@ -51,6 +51,14 @@ export interface Remito {
   // Estado
   estado?: "draft" | "pending" | "approved" | "rejected";
   fechaCreacion?: string;
+
+  /**
+   * Remito de prueba: no consume numeración real de CAI, usa un contador
+   * ficticio independiente y el PDF lleva marca de agua de "documento de
+   * prueba". Sirve para probar el circuito de envío (WhatsApp/email) sin
+   * gastar numeración fiscal real.
+   */
+  esPrueba?: boolean;
 }
 
 export interface RemitoItem {

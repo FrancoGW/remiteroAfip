@@ -3,6 +3,7 @@ import { PDFService } from "@/lib/pdf/pdfService";
 import { Remito } from "@/lib/types/remito";
 import { remitosStorageService } from "@/lib/storage/remitosStorage";
 import { obtenerProximoNumeroRemito } from "@/lib/cai/numeracion";
+import { obtenerProximoNumeroPrueba, CAI_PLACEHOLDER_PRUEBA } from "@/lib/cai/pruebaCounter";
 
 
 /**
@@ -188,35 +189,52 @@ export async function POST(request: NextRequest) {
 
     const fechaCreacion = new Date().toISOString();
 
-    // Asignar el próximo número disponible dentro del CAI vigente para el
-    // punto de venta solicitado (los remitos R ya no se autorizan vía WSFEv1/CAE).
-    let numeroAsignado;
-    try {
-      numeroAsignado = await obtenerProximoNumeroRemito(remito.puntoVenta);
-    } catch (error: any) {
-      const response = NextResponse.json(
-        {
-          success: false,
-          errores: [error.message || "No hay CAI vigente con numeración disponible."],
-        },
-        { status: 400 }
-      );
-      response.headers.set("Access-Control-Allow-Origin", "*");
-      response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      return response;
-    }
+    let nuevoRemito: Remito;
 
-    // Crear remito completo con el número y CAI asignados
-    const nuevoRemito: Remito = {
-      ...remito,
-      id: Date.now().toString(),
-      numeroRemito: numeroAsignado.numero,
-      cai: numeroAsignado.cai,
-      vencimientoCai: numeroAsignado.vencimientoCai.toISOString().split("T")[0],
-      estado: "approved",
-      fechaCreacion: fechaCreacion,
-    };
+    if (remito.esPrueba) {
+      // Remito de PRUEBA: numeración ficticia independiente, no toca CAI real.
+      const numero = await obtenerProximoNumeroPrueba();
+      nuevoRemito = {
+        ...remito,
+        id: Date.now().toString(),
+        numeroRemito: numero,
+        cai: CAI_PLACEHOLDER_PRUEBA,
+        vencimientoCai: undefined,
+        estado: "approved",
+        fechaCreacion: fechaCreacion,
+        esPrueba: true,
+      };
+    } else {
+      // Asignar el próximo número disponible dentro del CAI vigente para el
+      // punto de venta solicitado (los remitos R ya no se autorizan vía WSFEv1/CAE).
+      let numeroAsignado;
+      try {
+        numeroAsignado = await obtenerProximoNumeroRemito(remito.puntoVenta);
+      } catch (error: any) {
+        const response = NextResponse.json(
+          {
+            success: false,
+            errores: [error.message || "No hay CAI vigente con numeración disponible."],
+          },
+          { status: 400 }
+        );
+        response.headers.set("Access-Control-Allow-Origin", "*");
+        response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        return response;
+      }
+
+      nuevoRemito = {
+        ...remito,
+        id: Date.now().toString(),
+        numeroRemito: numeroAsignado.numero,
+        cai: numeroAsignado.cai,
+        vencimientoCai: numeroAsignado.vencimientoCai.toISOString().split("T")[0],
+        estado: "approved",
+        fechaCreacion: fechaCreacion,
+        esPrueba: false,
+      };
+    }
 
     // Guardar en MongoDB primero (así el remito existe aunque falle el PDF)
     await remitosStorageService.save(nuevoRemito);

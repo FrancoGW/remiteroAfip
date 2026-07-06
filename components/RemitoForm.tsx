@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Minus, Send, Loader2, Download, FileText } from "lucide-react";
+import { Plus, Minus, Send, Loader2, Download, FileText, FlaskConical } from "lucide-react";
 import { Remito, RemitoItem, TIPOS_REMITO, TIPOS_TRANSPORTE, UNIDADES_MEDIDA, PROVINCIAS_ARGENTINA } from "@/lib/types/remito";
 import { CUIT_EMISOR_PRINCIPAL } from "@/lib/config/cuitEmpresa";
 
-export default function RemitoForm() {
+interface RemitoFormProps {
+  /** Si es true, el remito se crea con esPrueba=true: no consume CAI real y el PDF lleva marca de agua. */
+  modoPrueba?: boolean;
+}
+
+export default function RemitoForm({ modoPrueba = false }: RemitoFormProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [remitoGenerado, setRemitoGenerado] = useState<{ id: string; numeroRemito?: number } | null>(null);
@@ -49,6 +54,7 @@ export default function RemitoForm() {
       },
     ],
     observaciones: "",
+    esPrueba: modoPrueba,
   });
 
   const handleInputChange = (
@@ -165,8 +171,9 @@ export default function RemitoForm() {
         },
       ],
       observaciones: "Mercadería certificada FSC 100%. Madera de primera calidad.",
+      esPrueba: modoPrueba,
     });
-    
+
     setMessage({
       type: "success",
       text: "Datos de ejemplo precargados correctamente",
@@ -192,7 +199,9 @@ export default function RemitoForm() {
       if (data.success) {
         setMessage({
           type: "success",
-          text: `¡Remito generado exitosamente! CAI: ${data.cai} - Nro: ${data.numeroRemito}`,
+          text: modoPrueba
+            ? `¡Remito de PRUEBA generado! (numeración ficticia, no consumió CAI real) - Nro: ${data.numeroRemito}`
+            : `¡Remito generado exitosamente! CAI: ${data.cai} - Nro: ${data.numeroRemito}`,
         });
         
         // Guardar información del remito generado para descargar PDF
@@ -259,6 +268,20 @@ export default function RemitoForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {modoPrueba && (
+        <div className="p-4 rounded-lg bg-amber-50 border-2 border-dashed border-amber-400 flex items-center gap-3">
+          <FlaskConical className="text-amber-600 flex-shrink-0" size={22} />
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">Modo prueba</p>
+            <p>
+              Este remito NO consume numeración real de CAI. Se genera con un número ficticio y el
+              PDF lleva una marca de agua de &quot;documento de prueba&quot;. Ideal para probar el envío
+              por WhatsApp/email.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Mensaje de respuesta */}
       {message && (
         <div

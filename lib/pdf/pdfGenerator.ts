@@ -464,6 +464,30 @@ export class PDFGenerator {
 
         currentY = currentY + 95;
 
+        // ===== BANNER "DOCUMENTO DE PRUEBA" =====
+        // Bien visible (no un detalle chico): nunca debe confundirse con un
+        // remito fiscal real. Se refuerza además con una marca de agua
+        // diagonal al final del documento.
+        if (remito.esPrueba) {
+          const bannerHeight = 24;
+          doc
+            .rect(50, currentY, pageWidth, bannerHeight)
+            .fillAndStroke("#fee2e2", "#dc2626");
+
+          doc
+            .font("Helvetica-Bold")
+            .fontSize(12)
+            .fillColor("#991b1b")
+            .text("DOCUMENTO DE PRUEBA — NO VÁLIDO COMO REMITO FISCAL", 50, currentY + 6, {
+              width: pageWidth,
+              align: "center",
+            })
+            .font("Helvetica")
+            .fillColor(colorNegro);
+
+          currentY = currentY + bannerHeight + 8;
+        }
+
         // ===== DATOS DEL CLIENTE =====
         const clienteY = currentY;
         const clienteHeight = 80;
@@ -645,6 +669,31 @@ export class PDFGenerator {
               { width: pageWidth / 2 - 5, align: "right" }
             )
             .font("Helvetica");
+        }
+
+        // ===== MARCA DE AGUA "DOCUMENTO DE PRUEBA" =====
+        // Se dibuja encima de todo el contenido, con opacidad baja para no
+        // tapar la lectura pero dejar clarísimo que no es un remito real.
+        // IMPORTANTE: debe ir ANTES del pie de página — dibujar texto en la
+        // franja del margen inferior (como hace el pie) puede disparar en
+        // PDFKit un salto de página automático; si la marca de agua se
+        // dibujara después, terminaría sola en una página en blanco en vez
+        // de superpuesta al comprobante.
+        if (remito.esPrueba) {
+          doc.save();
+          doc.opacity(0.15);
+          doc.font("Helvetica-Bold").fontSize(60).fillColor("#dc2626");
+
+          const centerX = doc.page.width / 2;
+          const centerY = doc.page.height / 2;
+          doc.rotate(-45, { origin: [centerX, centerY] });
+
+          const watermarkText = "DOCUMENTO DE PRUEBA";
+          const watermarkWidth = doc.widthOfString(watermarkText);
+          doc.text(watermarkText, centerX - watermarkWidth / 2, centerY - 30, { lineBreak: false });
+
+          doc.restore();
+          doc.opacity(1);
         }
 
         // Pie de página

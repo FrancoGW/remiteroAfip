@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { FileText, Calendar, User, Truck, MapPin, Download, Eye } from "lucide-react";
 import { Remito } from "@/lib/types/remito";
+import EnviarRemito from "./EnviarRemito";
 
 export default function RemitoList() {
   const [remitos, setRemitos] = useState<Remito[]>([]);
@@ -140,6 +141,11 @@ export default function RemitoList() {
                   >
                     {getEstadoText(remito.estado)}
                   </span>
+                  {remito.esPrueba && (
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                      🧪 PRUEBA
+                    </span>
+                  )}
                 </div>
                 {remito.cai && (
                   <p className="text-sm text-gray-600 mb-1">
@@ -221,8 +227,13 @@ export default function RemitoList() {
           >
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                   Remito #{selectedRemito.numeroRemito}
+                  {selectedRemito.esPrueba && (
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                      🧪 PRUEBA
+                    </span>
+                  )}
                 </h2>
                 {selectedRemito.cai && (
                   <p className="text-gray-600 mt-1">CAI: {selectedRemito.cai}</p>
@@ -357,6 +368,14 @@ export default function RemitoList() {
                   <div className="bg-gray-50 p-3 rounded text-sm">
                     <p>{selectedRemito.observaciones}</p>
                   </div>
+                </div>
+              )}
+
+              {/* Enviar */}
+              {selectedRemito.id && (
+                <div>
+                  <h3 className="font-semibold text-gray-800 mb-2">Enviar remito</h3>
+                  <EnviarRemito remitoId={selectedRemito.id} />
                 </div>
               )}
             </div>
