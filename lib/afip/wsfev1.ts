@@ -11,7 +11,14 @@
  */
 
 import * as soap from "soap";
+import * as https from "https";
+import axios from "axios";
 import { TokenAuth } from "./wsaa";
+
+// Servidores legados de AFIP negocian DH con claves débiles que OpenSSL 3.x
+// rechaza en su nivel de seguridad por defecto (SECLEVEL=2).
+const afipHttpsAgent = new https.Agent({ ciphers: "DEFAULT@SECLEVEL=1" });
+const afipAxios = axios.create({ httpsAgent: afipHttpsAgent });
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
@@ -61,7 +68,9 @@ let clientProd: soap.Client | null = null;
 async function getClient(production: boolean): Promise<soap.Client> {
   if (production) {
     if (!clientProd) {
-      clientProd = await soap.createClientAsync(WSFEV1_WSDL_PROD);
+      clientProd = await soap.createClientAsync(WSFEV1_WSDL_PROD, {
+        request: afipAxios,
+      } as soap.IOptions);
     }
     return clientProd;
   }
