@@ -7,7 +7,7 @@ import { LayoutDashboard, FileText, FlaskConical, ShieldCheck, Activity, Setting
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/remitos", label: "Remitos", icon: FileText },
-  { href: "/remitos/prueba", label: "Remito de Prueba", icon: FlaskConical },
+  { href: "/remito-de-prueba", label: "Remito de Prueba", icon: FlaskConical },
   { href: "/cai", label: "CAI", icon: ShieldCheck },
   { href: "/diagnostico", label: "Diagnóstico", icon: Activity },
   { href: "/configuracion", label: "Configuración", icon: Settings },

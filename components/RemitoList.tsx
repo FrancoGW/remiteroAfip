@@ -6,7 +6,7 @@ import { Remito } from "@/lib/types/remito";
 import EnviarRemito from "./EnviarRemito";
 
 interface RemitoListProps {
-  /** false: sólo remitos reales (default, usado en /remitos). true: sólo remitos de prueba (usado en /remitos/prueba). */
+  /** false: sólo remitos reales (default, usado en /remitos). true: sólo remitos de prueba (usado en /remito-de-prueba). */
   esPrueba?: boolean;
 }
 

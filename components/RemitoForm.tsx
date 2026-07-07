@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Minus, Send, Loader2, Download, FileText, FlaskConical } from "lucide-react";
+import { Plus, Minus, Send, Loader2, Download, FileText, FlaskConical, ClipboardPaste, Wand2 } from "lucide-react";
 import { Remito, RemitoItem, TIPOS_REMITO, TIPOS_TRANSPORTE, UNIDADES_MEDIDA, PROVINCIAS_ARGENTINA } from "@/lib/types/remito";
 import { CUIT_EMISOR_PRINCIPAL } from "@/lib/config/cuitEmpresa";
 import EnviarPruebaRapida from "./EnviarPruebaRapida";
+import { parseTextoRemitoPrueba, aplicarResultadoParseo } from "@/lib/prueba/parseTextoRemito";
 
 interface RemitoFormProps {
   /** Si es true, el remito se crea con esPrueba=true: no consume CAI real y el PDF lleva marca de agua. */
@@ -57,6 +58,23 @@ export default function RemitoForm({ modoPrueba = false }: RemitoFormProps) {
     observaciones: "",
     esPrueba: modoPrueba,
   });
+
+  const [mostrarPegado, setMostrarPegado] = useState(false);
+  const [textoPegado, setTextoPegado] = useState("");
+  const [mensajePegado, setMensajePegado] = useState<string | null>(null);
+
+  const interpretarTextoPegado = () => {
+    const resultado = parseTextoRemitoPrueba(textoPegado);
+
+    setFormData((prev) => aplicarResultadoParseo(prev, resultado));
+
+    const camposAplicados = Object.keys(resultado.formData).length + Object.keys(resultado.item).length;
+    let texto = `Se completaron ${camposAplicados} campo(s) del formulario. Revisá los datos antes de crear el remito.`;
+    if (resultado.noReconocidas.length > 0) {
+      texto += ` No reconocimos ${resultado.noReconocidas.length} línea(s): ${resultado.noReconocidas.join(", ")}.`;
+    }
+    setMensajePegado(texto);
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -280,6 +298,40 @@ export default function RemitoForm({ modoPrueba = false }: RemitoFormProps) {
               por WhatsApp/email.
             </p>
           </div>
+        </div>
+      )}
+
+      {modoPrueba && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setMostrarPegado((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+          >
+            <ClipboardPaste size={16} />
+            Pegar datos
+          </button>
+          {mostrarPegado && (
+            <div className="p-4 space-y-3">
+              <textarea
+                value={textoPegado}
+                onChange={(e) => setTextoPegado(e.target.value)}
+                rows={10}
+                placeholder={"Pegá acá el bloque de texto con formato Etiqueta: valor\n(ej. copiado de un remito real para simular datos)"}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <button
+                type="button"
+                onClick={interpretarTextoPegado}
+                disabled={!textoPegado.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+              >
+                <Wand2 size={16} />
+                Interpretar
+              </button>
+              {mensajePegado && <p className="text-sm text-gray-600">{mensajePegado}</p>}
+            </div>
+          )}
         </div>
       )}
 

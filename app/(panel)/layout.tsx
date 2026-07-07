@@ -15,7 +15,7 @@ import Sidebar from "@/components/layout/Sidebar";
 const TITULOS: Record<string, { title: string; subtitle?: string }> = {
   "/": { title: "Dashboard", subtitle: "Resumen de actividad del panel" },
   "/remitos": { title: "Remitos", subtitle: "Generación y listado de remitos electrónicos" },
-  "/remitos/prueba": {
+  "/remito-de-prueba": {
     title: "Remito de Prueba",
     subtitle: "Remitos ficticios para probar el circuito de envío sin gastar numeración de CAI",
   },
